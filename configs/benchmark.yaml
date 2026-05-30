@@ -1,0 +1,26 @@
+# Sweep timing benchmark config.
+# Mirrors BladeRF_Sweep_Benchmark.py from legacy/ — measures total sweep time
+# as a function of frequency step size. Used to choose the optimal step for acquisition.
+#
+# DANGER: This script exercises real hardware TX+RX. Requires CONFIRM HARDWARE RUN.
+
+bladerf:
+  gain_tx_db:        30        # safe TX gain used in legacy benchmark
+  gain_rx_db:        40
+  num_buffers:       16
+  buffer_size:       8192
+  num_transfers:     8
+  stream_timeout_ms: 3500
+
+sweep:
+  f_start_hz:         100.0e6   # [Hz]
+  f_stop_hz:         6000.0e6   # [Hz]
+  n_samples_per_step: 40000     # 1 ms per step at 40 MHz SR
+
+benchmark:
+  # Step sizes to test [MHz]. SR/BW is clamped to min(step_mhz, 40) MHz by hardware.
+  steps_to_test_mhz: [10, 20, 30, 40, 45, 50, 55, 60]
+  save_captures: false          # false = timing only, no disk usage; true = save .npy per step
+  output_dir:   data/raw/benchmark
+  report_file:  reports/generated/sweep_timing.txt
+  figure_file:  reports/generated/sweep_timing.png

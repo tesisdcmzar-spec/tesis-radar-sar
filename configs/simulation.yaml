@@ -1,0 +1,34 @@
+# Simulation parameters — no hardware required.
+# Used by simulation/phantom_model.py and simulation/synthetic_scan.py.
+
+phantom:
+  # Point targets defined as (cross-range x_m, down-range z_m) in meters,
+  # measured from aperture center and aperture plane respectively.
+  targets:
+    - {x_m:  0.00, z_m: 0.10}   # on-axis target at 10 cm range
+    - {x_m:  0.05, z_m: 0.12}   # off-axis target, slightly deeper
+  medium_permittivity: 1.0       # free space / air background
+  target_rcs: 1.0                # relative radar cross section (normalized)
+
+sfcw:
+  f_start_hz: 500.0e6    # sweep start frequency [Hz]
+  f_stop_hz:  2500.0e6   # sweep stop frequency  [Hz]  → 2 GHz bandwidth
+  f_step_hz:  5.0e6      # frequency step [Hz]   → 400 frequency points
+  # Range resolution: c / (2 * BW) = 3e8 / (2 * 2e9) = 7.5 cm
+  # Unambiguous range: c / (2 * f_step) = 3e8 / (2 * 5e6) = 30 m
+
+azimuth:
+  x_start_m:  -0.15    # aperture left edge [m]
+  x_stop_m:    0.15    # aperture right edge [m]
+  x_step_m:    0.02    # position step [m] → 16 positions
+  settle_s:    0.0     # settling time (0 for simulation)
+
+reconstruction:
+  method: backprojection    # backprojection | delay_and_sum
+  range_padding: 4          # IFFT zero-padding factor (4× → finer range grid)
+  speed_of_light: 3.0e8     # [m/s]
+
+output:
+  figures_dir: reports/generated
+  save_range_profiles: true
+  save_sar_image: true

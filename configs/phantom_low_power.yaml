@@ -1,0 +1,35 @@
+# Low-power phantom experiment config.
+# All hardware values derived from validated legacy scripts in legacy/.
+#
+# DANGER: session.dry_run MUST be true unless you type CONFIRM HARDWARE RUN
+# in the current Claude Code session. Never change it here without that approval.
+
+bladerf:
+  sample_rate_hz: 40_000_000    # 40 MHz — stable on USB 3.0 (legacy: all sweep scripts)
+  bandwidth_hz:   40_000_000    # match sample rate
+  gain_tx_db:     20            # conservative start; legacy used 30–40 dB
+  gain_rx_db:     40            # legacy range 40–60 dB
+  num_buffers:    16            # validated in all legacy scripts
+  buffer_size:    8192
+  num_transfers:  8
+  stream_timeout_ms: 3500
+  dac_scale:      2048          # 12-bit DAC: integers -2048 to 2047, normalize /2048.0 on RX
+
+sfcw:
+  f_start_hz:         500.0e6   # [Hz]
+  f_stop_hz:         2500.0e6   # [Hz] → 2 GHz bandwidth
+  f_step_hz:          40.0e6    # [Hz] → 50 steps, matches BW per step
+  n_samples_per_step: 40000     # 1 ms capture at 40 MHz SR (validated: test_barrido_frec_txrx.py)
+  settle_us:          0         # extra wait after LO tune (hardware already settles in ~1 ms)
+
+azimuth:
+  x_start_m:  -0.10    # [m]
+  x_stop_m:    0.10    # [m]
+  x_step_m:    0.02    # [m] → 11 positions
+  settle_s:    0.5     # mechanical settling time after each move [s]
+
+session:
+  dry_run: true          # ALWAYS true by default. Requires CONFIRM HARDWARE RUN to change.
+  output_dir: data/raw
+  save_npy: true
+  log_dir: reports/session_logs
