@@ -1,0 +1,19 @@
+==================================================
+   REPORTE TÉCNICO BARRIDO FULL DUPLEX
+==================================================
+Pasos totales completados: 99
+Rango de frecuencias: 100.0 MHz - 6000.0 MHz
+
+--- TIEMPOS DE OSCILADORES (SINTONÍA) ---
+Promedio LO TX: 14.2785 ms
+Promedio LO RX: 19.2863 ms
+
+--- TIEMPOS DE TRANSFERENCIA DE DATOS ---
+Promedio Transferencia TX: 0.0813 ms
+Promedio Transferencia RX: 0.0888 ms
+
+--- ESTADÍSTICAS GLOBALES ---
+Tiempo Operativo Acumulado: 3331.71 ms
+Tiempo de Reloj Real (Wall time): 3.5476 Segundos
+Peso Total de Datos Crudos en Disco: 60.44 MB
+==================================================

@@ -1,0 +1,9 @@
+========================================
+   RESULTADOS DEL EXPERIMENTO
+========================================
+Pasos totales: 99
+Tiempo Promedio LO (Sintonía): 19.8398 ms
+Tiempo Promedio RX (Captura): 0.0680 ms
+Tiempo Total Real del Barrido: 1970.87 ms
+Peso TOTAL en disco: 60.44 MB
+========================================

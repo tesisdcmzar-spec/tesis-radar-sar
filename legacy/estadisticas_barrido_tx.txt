@@ -1,0 +1,8 @@
+========================================
+   RESULTADOS DEL EXPERIMENTO (TX)
+========================================
+Pasos totales: 99
+Tiempo Promedio LO (Sintonía TX): 11.4601 ms
+Tiempo Promedio TX (Transferencia): 0.0742 ms
+Tiempo Total Real del Barrido: 1141.90 ms
+========================================
