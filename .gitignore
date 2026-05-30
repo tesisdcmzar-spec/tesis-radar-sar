@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Local environment and secrets
+.env
+.env.*
+secrets/
+credentials/
+*.key
+*.pem
+*.p12
+
+# Claude local/private config
+CLAUDE.local.md
+.claude/settings.local.json
+
+# Large experimental data
+# Keep raw data outside git. Track metadata, configs, and small examples instead.
+data/raw/
+data/processed/
+*.npy
+*.npz
+*.bin
+*.iq
+*.h5
+*.hdf5
+
+# Generated artifacts
+reports/generated/
+thesis/figures/generated/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/.ropeproject/

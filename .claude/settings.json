@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "autoMemoryEnabled": true,
+  "permissions": {
+    "allow": [
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(python --version)",
+      "Bash(py --version)",
+      "Bash(python -m pytest*)",
+      "Bash(py -m pytest*)",
+      "Bash(pytest*)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./secrets/**)",
+      "Read(./credentials/**)",
+      "Read(./data/raw/**)",
+      "Read(./data/processed/**)",
+      "Bash(del *)",
+      "Bash(rm *)",
+      "Bash(rmdir *)",
+      "Bash(Remove-Item *)",
+      "Bash(format *)",
+      "Bash(bladeRF-cli*)",
+      "Bash(arduino-cli upload*)",
+      "Bash(pio run -t upload*)",
+      "Bash(python experiments/run_scan.py*)",
+      "Bash(py experiments/run_scan.py*)",
+      "Bash(python experiments/benchmark_sweep.py*)",
+      "Bash(py experiments/benchmark_sweep.py*)"
+    ]
+  }
+}
