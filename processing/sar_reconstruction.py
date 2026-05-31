@@ -19,7 +19,7 @@ def backprojection(
     z_img: np.ndarray,
     c: float = 3e8,
     padding_factor: int = 4,
-    window: bool = True,
+    window: str = 'hanning',
 ) -> np.ndarray:
     """
     Backprojection SAR reconstruction.
@@ -31,7 +31,7 @@ def backprojection(
     z_img         : 1D down-range image grid [m], shape (N_z,)
     c             : propagation speed [m/s]
     padding_factor: IFFT zero-padding factor forwarded to range_profile
-    window        : Hanning window flag forwarded to range_profile
+    window        : taper for range profile ('none', 'hanning', 'blackman')
 
     Returns
     -------
@@ -85,5 +85,6 @@ def image_grid_from_config(cfg: dict, N_x: int = 200, N_z: int = 200) -> tuple:
     az = cfg["azimuth"]
     margin = 0.05  # m
     x_img = np.linspace(float(az["x_start_m"]) - margin, float(az["x_stop_m"]) + margin, N_x)
-    z_img = np.linspace(0.01, 0.50, N_z)
+    # Near-field phantom range: 0.02–0.25 m (zoomed in vs. old 0.01–0.50 m)
+    z_img = np.linspace(0.02, 0.25, N_z)
     return x_img, z_img

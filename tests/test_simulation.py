@@ -111,7 +111,7 @@ def test_range_profile_peak_location():
     # Single azimuth position, on-axis
     scan = make_scan(phantom, 500e6, 2500e6, 5e6, 0.0, 0.0, 1.0)
 
-    range_m, profiles = compute_range_profiles(scan, padding_factor=4, window=False, c=c)
+    range_m, profiles = compute_range_profiles(scan, padding_factor=4, window='none', c=c)
     peak_idx = int(np.argmax(np.abs(profiles[:, 0])))
     peak_range = range_m[peak_idx]
 
