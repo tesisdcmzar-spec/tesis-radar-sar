@@ -332,3 +332,66 @@ git commit && git push                       # commits 232ef92, 31bc9ee
 **Informe completo de cierre:** [reports/session_reports/2026-05-31_sesion_cierre_hardware_rx_fase3.md](session_reports/2026-05-31_sesion_cierre_hardware_rx_fase3.md)
 
 **Próxima fase:** `experiments/run_bladerf_rx_sfcw_sweep.py` — barrido SFCW estrecho supervisado, RX-only, sin TX, para ensamblar H(f) y calcular primer perfil de rango con `processing/range_profile.py`.
+
+---
+
+## Session 2026-05-31 (Phase 3 — supervised RX-only SFCW sweep + range profile)
+
+**Goal:** Run a supervised RX-only narrowband SFCW-style sweep (2.3–2.5 GHz) and
+exercise the full H(f) → range profile pipeline with real hardware data.
+
+**Hardware actions:** Real bladeRF opened and closed 221 times (21 pilot + 200 full).
+RX-only. No TX. No RF transmitted. No motor movement. No human subject.
+Not a SAR scan. Not a medical test.
+
+**Files created:**
+- [`acquisition/rx_sfcw_sweep.py`](../acquisition/rx_sfcw_sweep.py) — hardware-independent
+  SFCW sweep helper: `make_frequency_grid`, `coherent_average_iq`,
+  `extract_h_from_iq_bursts`, `make_synthetic_scan_from_h`, `compute_sweep_metrics`,
+  `SweepConfig`, `SweepResult`. No bladeRF import.
+- [`experiments/run_bladerf_rx_sfcw_sweep.py`](../experiments/run_bladerf_rx_sfcw_sweep.py)
+  — supervised real-hardware sweep script: pilot mode (21 freqs, 10 MHz step),
+  full mode (201 freqs, 1 MHz step), go/no-go logic, range profile generation.
+- [`tests/test_rx_sfcw_sweep.py`](../tests/test_rx_sfcw_sweep.py) — 43 unit tests
+  (synthetic data only, no hardware).
+- [`reports/session_reports/2026-05-31_rx_only_sfcw_sweep.md`](2026-05-31_rx_only_sfcw_sweep.md)
+  — Spanish session report.
+
+**Pilot sweep results (21/21):**
+- Frequencies: 2.300 – 2.500 GHz, step 10 MHz, 21 points
+- All 21 captures OK. Clipping: 0. Failures: 0.
+- BW = 200 MHz, dr = 75 cm, R_unamb = 15 m
+- Peak |H(f)| at 2470 MHz, -67.0 dB (noise floor)
+- H(f) dynamic range: 2.7 dB (nearly flat, consistent with noise)
+- Peak range bin: 0.000 m, -86.1 dB (DC bin of noise IFFT)
+
+**Full sweep results (200/201):**
+- Frequencies: 2.300 – 2.500 GHz, step 1 MHz, 201 points
+- 200 captures OK, 1 failure at 2452 MHz (USB NIOS II timeout, device recovered)
+- Clipping: 0.
+- R_unamb increased to 150 m with 1 MHz step
+- Notable elevated RMS at 2416-2420 MHz (Wi-Fi 802.11b/g/n ISM, expected)
+- Peak range bin: 0.000 m, -86.2 dB (noise floor)
+
+**Scientific honesty:**
+- H(f) = coherent mean of RX noise, NOT a radar transfer function.
+- Range profile = pipeline validation, NOT target detection.
+- No SAR imaging. No object detection. No dielectric characterization. No clinical claims.
+
+**Local outputs (not committed):**
+- `data/raw/rx_sfcw_sweep/pilot/20260531_164839/` -- 21 IQ bursts + H_raw.npy + metadata
+- `data/raw/rx_sfcw_sweep/full/20260531_165012/` -- 200 IQ bursts + H_raw.npy + metadata
+- `reports/generated/rx_sfcw_{pilot,full}_{h_magnitude_phase,range_profile}.png`
+- `reports/generated/rx_sfcw_sweep_summary.md`
+
+**Test results:** 125/125 passed (43 new + 82 prior), no regressions.
+
+**Bug fixed during session:** Unicode cp1252 UnicodeEncodeError in print() statements
+on Windows PowerShell -- replaced delta, em-dashes, arrows with ASCII equivalents in
+all print/console paths.
+
+**Full session report:** [reports/session_reports/2026-05-31_rx_only_sfcw_sweep.md](session_reports/2026-05-31_rx_only_sfcw_sweep.md)
+
+**Next step:** First calibrated TX/RX experiment -- implement real TX path in
+`hardware/bladerf_device.py`, mount bladeRF with known reflector, measure S21,
+verify range-profile peak at expected distance.
