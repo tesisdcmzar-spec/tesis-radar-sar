@@ -13,6 +13,7 @@ from __future__ import annotations
 import importlib
 import re
 import sys
+import unittest.mock
 from pathlib import Path
 
 import numpy as np
@@ -33,7 +34,7 @@ from hardware.safety import (
     validate_n_samples,
     validate_sample_rate_hz,
 )
-from hardware.bladerf_device import BladeRFConfig, BladeRFDevice
+from hardware.bladerf_device import BladeRFConfig, BladeRFDevice, _import_bladerf, sc16q11_to_complex
 
 
 # ---------------------------------------------------------------------------
@@ -325,3 +326,213 @@ def test_load_bladerf_config_from_yaml():
     assert cfg.dry_run is True
     assert cfg.center_freq_hz == pytest.approx(2.4e9)
     assert cfg.n_samples == 40_000
+
+
+# ---------------------------------------------------------------------------
+# sc16q11_to_complex — conversion helper
+# ---------------------------------------------------------------------------
+
+def test_sc16q11_zeros_returns_zero_complex():
+    raw = np.zeros(8, dtype=np.int16)
+    out = sc16q11_to_complex(raw)
+    assert np.all(out == 0 + 0j)
+
+
+def test_sc16q11_output_dtype_is_complex128():
+    raw = np.zeros(4, dtype=np.int16)
+    assert sc16q11_to_complex(raw).dtype == np.complex128
+
+
+def test_sc16q11_output_shape_is_half_input():
+    raw = np.zeros(100, dtype=np.int16)
+    assert sc16q11_to_complex(raw).shape == (50,)
+
+
+def test_sc16q11_known_interleaved_values():
+    # [I0=2048, Q0=0, I1=0, Q1=2048] → [1+0j, 0+1j]
+    raw = np.array([2048, 0, 0, 2048], dtype=np.int16)
+    out = sc16q11_to_complex(raw)
+    np.testing.assert_allclose(out, [1.0 + 0j, 0.0 + 1j], atol=1e-9)
+
+
+def test_sc16q11_normalization_divides_by_2048():
+    # Max positive SC16_Q11 value = 2047 on both I and Q
+    raw = np.array([2047, 2047], dtype=np.int16)
+    out = sc16q11_to_complex(raw)
+    assert out[0].real == pytest.approx(2047 / 2048.0)
+    assert out[0].imag == pytest.approx(2047 / 2048.0)
+
+
+def test_sc16q11_negative_values():
+    raw = np.array([-2048, -2048], dtype=np.int16)
+    out = sc16q11_to_complex(raw)
+    assert out[0].real == pytest.approx(-1.0)
+    assert out[0].imag == pytest.approx(-1.0)
+
+
+def test_sc16q11_odd_length_raises_value_error():
+    raw = np.array([1, 2, 3], dtype=np.int16)
+    with pytest.raises(ValueError, match="even length"):
+        sc16q11_to_complex(raw)
+
+
+def test_sc16q11_2d_array_raises_value_error():
+    raw = np.zeros((2, 4), dtype=np.int16)
+    with pytest.raises(ValueError, match="even length"):
+        sc16q11_to_complex(raw)
+
+
+# ---------------------------------------------------------------------------
+# _import_bladerf — lazy import helper
+# ---------------------------------------------------------------------------
+
+def test_import_bladerf_raises_when_not_installed():
+    """_import_bladerf() must raise ImportError when the package is absent."""
+    with unittest.mock.patch.dict(sys.modules, {"bladerf": None}):
+        with pytest.raises(ImportError, match="bladeRF Python bindings"):
+            _import_bladerf()
+
+
+# ---------------------------------------------------------------------------
+# Fake bladeRF backend — for real-mode path tests without USB
+# ---------------------------------------------------------------------------
+
+class _FakeChannel:
+    """Minimal fake bladeRF channel object."""
+    frequency: int = 0
+    sample_rate: int = 0
+    bandwidth: int = 0
+    gain: int = 0
+
+
+class _FakeBladeRFDevice:
+    """Fake bladeRF device returned by _FakeBladeRFModule.BladeRF()."""
+
+    def __init__(self) -> None:
+        self._ch = _FakeChannel()
+        self.sync_configured: bool = False
+        self.rx_calls: int = 0
+        self.closed: bool = False
+
+    def Channel(self, ch_id):
+        return self._ch
+
+    def sync_config(self, **kwargs) -> None:
+        self.sync_configured = True
+
+    def sync_rx(self, buf: bytearray, n_samples: int) -> None:
+        buf[:n_samples * 4] = bytes(n_samples * 4)
+        self.rx_calls += 1
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class _FakeBladeRFModule:
+    """Fake bladeRF module injectable via BladeRFDevice(_bladerf_module=...)."""
+
+    def __init__(self) -> None:
+        self._last_device: "_FakeBladeRFDevice | None" = None
+
+    def BladeRF(self) -> _FakeBladeRFDevice:
+        self._last_device = _FakeBladeRFDevice()
+        return self._last_device
+
+    @staticmethod
+    def CHANNEL_RX(n: int) -> int:
+        return n
+
+    class ChannelLayout:
+        RX_X1 = "RX_X1"
+
+    class Format:
+        SC16_Q11 = "SC16_Q11"
+
+
+# ---------------------------------------------------------------------------
+# Real-mode path with fake backend (no USB, no RF)
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def fake_mod():
+    return _FakeBladeRFModule()
+
+
+@pytest.fixture
+def real_cfg():
+    return BladeRFConfig(
+        center_freq_hz=2.4e9,
+        sample_rate_hz=40e6,
+        bandwidth_hz=40e6,
+        rx_gain_db=20.0,
+        tx_gain_db=-20.0,
+        n_samples=1000,
+        dry_run=False,
+    )
+
+
+def test_real_mode_with_fake_backend_constructs(real_cfg, fake_mod):
+    dev = BladeRFDevice(real_cfg, confirmation="CONFIRM HARDWARE RUN",
+                        _bladerf_module=fake_mod)
+    assert dev is not None
+    assert fake_mod._last_device is not None
+
+
+def test_real_mode_with_fake_backend_opens_device(real_cfg, fake_mod):
+    BladeRFDevice(real_cfg, confirmation="CONFIRM HARDWARE RUN",
+                  _bladerf_module=fake_mod)
+    assert isinstance(fake_mod._last_device, _FakeBladeRFDevice)
+
+
+def test_real_mode_with_fake_backend_configure_rx_sets_channel(real_cfg, fake_mod):
+    dev = BladeRFDevice(real_cfg, confirmation="CONFIRM HARDWARE RUN",
+                        _bladerf_module=fake_mod)
+    dev.configure_rx()
+    ch = fake_mod._last_device._ch
+    assert ch.frequency == int(2.4e9)
+    assert ch.sample_rate == int(40e6)
+    assert ch.bandwidth == int(40e6)
+    assert ch.gain == 20
+
+
+def test_real_mode_with_fake_backend_capture_rx_returns_complex_array(real_cfg, fake_mod):
+    dev = BladeRFDevice(real_cfg, confirmation="CONFIRM HARDWARE RUN",
+                        _bladerf_module=fake_mod)
+    dev.configure_rx()
+    iq = dev.capture_rx()
+    assert isinstance(iq, np.ndarray)
+    assert iq.dtype == np.complex128
+    assert iq.shape == (1000,)
+
+
+def test_real_mode_with_fake_backend_capture_calls_sync_rx(real_cfg, fake_mod):
+    dev = BladeRFDevice(real_cfg, confirmation="CONFIRM HARDWARE RUN",
+                        _bladerf_module=fake_mod)
+    dev.configure_rx()
+    dev.capture_rx()
+    assert fake_mod._last_device.rx_calls == 1
+
+
+def test_real_mode_with_fake_backend_capture_configures_sync(real_cfg, fake_mod):
+    dev = BladeRFDevice(real_cfg, confirmation="CONFIRM HARDWARE RUN",
+                        _bladerf_module=fake_mod)
+    dev.configure_rx()
+    dev.capture_rx()
+    assert fake_mod._last_device.sync_configured is True
+
+
+def test_real_mode_with_fake_backend_close_calls_device_close(real_cfg, fake_mod):
+    dev = BladeRFDevice(real_cfg, confirmation="CONFIRM HARDWARE RUN",
+                        _bladerf_module=fake_mod)
+    dev.close()
+    assert fake_mod._last_device.closed is True
+    assert dev._closed is True
+
+
+def test_real_mode_with_fake_backend_zero_buffer_gives_zero_iq(real_cfg, fake_mod):
+    """Fake sync_rx fills zeros → IQ should be all zero after SC16_Q11 conversion."""
+    dev = BladeRFDevice(real_cfg, confirmation="CONFIRM HARDWARE RUN",
+                        _bladerf_module=fake_mod)
+    dev.configure_rx()
+    iq = dev.capture_rx()
+    assert np.all(iq == 0 + 0j)

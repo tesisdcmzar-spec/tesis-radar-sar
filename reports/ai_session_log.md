@@ -169,3 +169,41 @@ git commit && git push                       # commits 232ef92, 31bc9ee
 **Hardware actions:** None. Dry-run only. No RF, no USB, no bladeRF API, no motors.
 
 **Next step (Phase 3 cont.):** Implement real `capture_rx()` in `BladeRFDevice` using lazy `bladerf` import; first real capture requires `"CONFIRM HARDWARE RUN"` in session.
+
+---
+
+## Session 2026-05-31 (continuidad — sin actividad nueva)
+
+**Goal:** Verify repo state after context compaction; confirm Phase 3 was already complete.
+
+**Result:** No changes. Commit `be03e66` confirmed at HEAD, working tree clean, 65/65 tests still passing from prior session.
+
+**Hardware actions:** None.
+
+**Full note:** [reports/session_reports/2026-05-31_verificacion_continuidad_fase3.md](session_reports/2026-05-31_verificacion_continuidad_fase3.md)
+
+---
+
+## Session 2026-05-31 (Phase 3 cont. — prepare real RX path)
+
+**Goal:** Implement the real RX capture code path in `hardware/bladerf_device.py` without executing any hardware operations.
+
+**Files modified:**
+- [`hardware/bladerf_device.py`](../hardware/bladerf_device.py) — Added `sc16q11_to_complex()`, `_import_bladerf()`, `_capture_rx_real()`, `BladeRFDevice._bladerf_module` injection parameter; real-mode `configure_rx()` now sets channel frequency/sample_rate/bandwidth/gain via libbladeRF API.
+- [`tests/test_bladerf_device.py`](../tests/test_bladerf_device.py) — 18 new tests: SC16_Q11 conversion (8 tests), `_import_bladerf` (1 test), fake-backend real-mode path (9 tests).
+- [`docs/hardware_bladerf_safety.md`](../docs/hardware_bladerf_safety.md) — Added section 10: "Ruta RX real preparada — no ejecutada aún".
+
+**Files created:**
+- [`reports/session_reports/2026-05-31_phase3_prepare_real_rx_capture.md`](session_reports/2026-05-31_phase3_prepare_real_rx_capture.md) — Spanish session report.
+
+**What was prepared:**
+- Lazy bladeRF import via `importlib.import_module("bladerf")` — never triggered at module load.
+- `sc16q11_to_complex(raw)`: converts interleaved int16 [I0,Q0,...] → complex128 by dividing by 2048.0.
+- `_capture_rx_real()`: full sync_config + bytearray buffer + sync_rx + SC16_Q11 conversion.
+- Fake-backend injection (`_bladerf_module` parameter) so tests exercise real-mode code without USB.
+
+**Test results:** 82/82 passed (65 prior + 17 new), no regressions.
+
+**Hardware actions:** None. No bladeRF opened. No USB accessed. No RF transmitted. No motors moved.
+
+**Next step (Phase 3 — first supervised real RX):** Connect bladeRF, install `pip install bladerf`, connect RX antenna/load, user present, provide `confirmation="CONFIRM HARDWARE RUN"` in session.

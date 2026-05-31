@@ -112,13 +112,51 @@ Salida esperada:
 
 | Funcionalidad | Estado |
 |--------------|--------|
-| `BladeRFDevice.capture_rx()` real | Stub (`NotImplementedError`) |
-| `BladeRFDevice.configure_rx()` con `libbladeRF` | Stub |
-| `BladeRFDevice.configure_tx()` con `libbladeRF` | Stub |
+| `BladeRFDevice.capture_rx()` real | **Preparado** — implementado, pendiente ejecución supervisada |
+| `BladeRFDevice.configure_rx()` con `libbladeRF` | **Preparado** — implementado, pendiente ejecución supervisada |
+| `BladeRFDevice.configure_tx()` con `libbladeRF` | Stub — `NotImplementedError` en modo real |
 | `BladeRFDevice.transmit_tone()` real | Stub — `SafetyError` en modo real |
 | Barrido SFCW multi-frecuencia automático | No implementado |
 | Control de etapa acimutal | No implementado (módulo separado) |
 | Sustracción de fondo automática | No implementado |
+
+## 10. Ruta RX real preparada — no ejecutada aún
+
+A partir del commit `Prepare safe real RX path for bladeRF`, el código contiene la implementación completa de la ruta de captura RX real, pero **esta ruta no ha sido ejecutada en hardware real**.
+
+### Lo que se añadió
+
+- **`sc16q11_to_complex(raw)`** — función auxiliar independiente que convierte el formato de muestra SC16_Q11 del bladeRF (enteros int16 intercalados [I0, Q0, I1, Q1, ...]) a un array NumPy complejo de tipo `complex128`, dividiendo por 2048.0.  Es verificable sin hardware.
+
+- **`_import_bladerf()`** — función de importación diferida.  Usa `importlib.import_module("bladerf")` en lugar de un `import bladerf` de nivel superior.  Jamás se llama durante la importación del módulo ni durante los tests normales.  Solo se invoca cuando `dry_run=False` y `CONFIRM HARDWARE RUN` ha sido validado, y no se ha inyectado un backend falso.
+
+- **`BladeRFDevice.__init__(…, _bladerf_module=None)`** — parámetro interno para tests.  Cuando se proporciona, se usa en lugar del módulo bladeRF real.  Permite ejercer la ruta de código real con un backend falso sin acceso USB.
+
+- **`BladeRFDevice.configure_rx()`** en modo real — llama a `device.Channel(CHANNEL_RX(0))` y establece `frequency`, `sample_rate`, `bandwidth`, `gain`.
+
+- **`BladeRFDevice._capture_rx_real()`** — ruta de captura real:
+  1. Llama a `sync_config()` con `ChannelLayout.RX_X1` y `Format.SC16_Q11`.
+  2. Asigna un `bytearray` de `n_samples × 4` bytes.
+  3. Llama a `sync_rx(buf, n_samples)`.
+  4. Convierte con `sc16q11_to_complex()` a `complex128`.
+
+### Lo que no ocurrió
+
+- Ningún dispositivo bladeRF fue abierto.
+- Ningún USB fue accedido.
+- Ninguna RF fue transmitida.
+- La frase `"CONFIRM HARDWARE RUN"` fue usada únicamente en los tests con backend falso.
+
+### Primer test RX real supervisado
+
+Para ejecutar la primera captura RX real se requiere:
+
+1. Conectar físicamente el bladeRF al USB.
+2. Instalar las librerias Python: `pip install bladerf`.
+3. Conectar una antena RX o carga de 50 Ω al puerto RX.
+4. Revisar los ítems de la lista de verificación (sección 5 de este documento).
+5. Proporcionar `confirmation="CONFIRM HARDWARE RUN"` en la sesión.
+6. Ejecutar con `dry_run=False` bajo supervisión directa del usuario.
 
 ## 8. Estructura de módulos
 
