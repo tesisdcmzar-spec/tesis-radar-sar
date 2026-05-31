@@ -316,3 +316,19 @@ git commit && git push                       # commits 232ef92, 31bc9ee
 **Test results:** 82/82 passed (no regressions).
 
 **Next step:** Supervised SFCW sweep (RX-only) over a narrow band (e.g. 2.3–2.5 GHz, 1 MHz steps) to build H(f) and compute range profile. No TX yet.
+
+---
+
+## Session 2026-05-31 — CIERRE (commits d3b5cfe + 44392be)
+
+**Tipo:** Cierre de sesión hardware Fase 3 — smoke test RX + survey de frecuencias.
+
+**Resumen:** Primera sesión con hardware real bladeRF conectado. Se realizaron dos tareas supervisadas RX-only. El smoke test (d3b5cfe) abrió el dispositivo por primera vez en modo real, capturó 100 000 muestras IQ a 2.4 GHz y corrigió tres bugs en `hardware/bladerf_device.py` no visibles sin hardware. El survey de frecuencias (44392be) caracterizó el receptor en 7 bandas (900 MHz–5 GHz), con 7/7 capturas exitosas, todas clasificadas como noise-like.
+
+**Datos brutos:** Almacenados localmente en `data/raw/rx_smoke/` y `data/raw/rx_frequency_survey/`. Excluidos de git por `.gitignore` (`data/raw/`, `*.npy`). No versionados.
+
+**Tests:** 82/82 pasando. Sin regresiones.
+
+**Informe completo de cierre:** [reports/session_reports/2026-05-31_sesion_cierre_hardware_rx_fase3.md](session_reports/2026-05-31_sesion_cierre_hardware_rx_fase3.md)
+
+**Próxima fase:** `experiments/run_bladerf_rx_sfcw_sweep.py` — barrido SFCW estrecho supervisado, RX-only, sin TX, para ensamblar H(f) y calcular primer perfil de rango con `processing/range_profile.py`.
