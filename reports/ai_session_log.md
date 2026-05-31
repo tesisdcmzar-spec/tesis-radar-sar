@@ -142,3 +142,30 @@ git commit && git push                       # commits 232ef92, 31bc9ee
 **Hardware actions:** None. Fully offline. No RF, no motors, no bladeRF API.
 
 **Next step (Phase 3):** `hardware/bladerf_device.py` — safe bladeRF abstraction with dry-run mode and explicit `CONFIRM HARDWARE RUN` gate before any RF transmission.
+
+---
+
+## Session 2026-05-31 (Phase 3 — bladeRF dry-run abstraction)
+
+**Goal:** Create the hardware abstraction layer for the bladeRF; dry-run only, no hardware actions.
+
+**Files created:**
+- [`hardware/__init__.py`](../hardware/__init__.py) — package documentation.
+- [`hardware/safety.py`](../hardware/safety.py) — `SafetyError`, `HardwareConfirmation`, `require_hardware_confirmation()`, safety constants (70 MHz – 6 GHz, 61.44 MS/s, 56 MHz BW, −20 dBm TX limit), 5 validation functions.
+- [`hardware/bladerf_device.py`](../hardware/bladerf_device.py) — `BladeRFConfig` dataclass (validated on init), `BladeRFDevice` with dry-run synthetic IQ and real-hardware stubs.
+- [`configs/bladerf_dry_run.yaml`](../configs/bladerf_dry_run.yaml) — reference YAML config, `dry_run: true`.
+- [`experiments/run_bladerf_dry_run.py`](../experiments/run_bladerf_dry_run.py) — dry-run demo: configure, capture, transmit_tone (no RF), status, close; saves figure and summary.
+- [`tests/test_bladerf_device.py`](../tests/test_bladerf_device.py) — 30 hardware/safety tests (no bladeRF required).
+- [`docs/hardware_bladerf_safety.md`](../docs/hardware_bladerf_safety.md) — Spanish safety guide.
+- [`thesis/cap5_abstraccion_hardware_bladerf.md`](../thesis/cap5_abstraccion_hardware_bladerf.md) — Spanish thesis Chapter 5.
+- [`reports/session_reports/2026-05-31_phase3_bladerf_dry_run_abstraction.md`](2026-05-31_phase3_bladerf_dry_run_abstraction.md) — Spanish session report.
+
+**Generated local outputs** (gitignored):
+- `reports/generated/bladerf_dry_run_iq_preview.png`
+- `reports/generated/bladerf_dry_run_summary.md`
+
+**Test results:** 61/61 passed (31 prior + 30 new), no regressions.
+
+**Hardware actions:** None. Dry-run only. No RF, no USB, no bladeRF API, no motors.
+
+**Next step (Phase 3 cont.):** Implement real `capture_rx()` in `BladeRFDevice` using lazy `bladerf` import; first real capture requires `"CONFIRM HARDWARE RUN"` in session.

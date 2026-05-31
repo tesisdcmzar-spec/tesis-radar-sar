@@ -1,0 +1,38 @@
+# bladeRF dry-run configuration
+# -----------------------------------------------------------------------
+# IMPORTANT: dry_run is true — no RF transmission is allowed with this config.
+# To perform real hardware operations, dry_run must be set to false AND the
+# exact confirmation string 'CONFIRM HARDWARE RUN' must be provided to
+# BladeRFDevice.__init__() in the session.  This confirmation is NOT persistent.
+# -----------------------------------------------------------------------
+
+hardware:
+  dry_run: true
+  hardware_confirm_required: true
+
+  # Center frequency for the RX (and TX) path
+  center_freq_hz: 2400.0e6    # 2.4 GHz (2400 MHz) — ISM band, safe for dry-run testing
+
+  # Sample rate — bladeRF 2.0 micro supports up to ~61.44 MS/s
+  sample_rate_hz: 40.0e6      # 40 MS/s
+
+  # Analog bandwidth — must be <= sample_rate for anti-aliasing
+  bandwidth_hz: 40.0e6        # 40 MHz
+
+  # RX gain [dB] — valid range 0-60 dB
+  rx_gain_db: 20.0
+
+  # TX gain [dB] — conservative placeholder (NOT used for transmission in dry-run)
+  tx_gain_db: -20.0
+
+  # Number of IQ samples per capture burst
+  n_samples: 40000             # 40000 samples @ 40 MS/s = 1 ms per frequency
+
+  # bladeRF channel
+  channel: "x1"
+
+notes:
+  - "This config is for software validation only — no RF is transmitted."
+  - "Increase n_samples for longer captures; must stay <= 10,000,000."
+  - "Set dry_run: false only with CONFIRM HARDWARE RUN in the session."
+  - "TX gain -20 dB is a conservative placeholder; verify antenna/load before raising."
