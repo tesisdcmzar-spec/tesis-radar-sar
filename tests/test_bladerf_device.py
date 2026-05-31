@@ -424,8 +424,21 @@ class _FakeBladeRFDevice:
         buf[:n_samples * 4] = bytes(n_samples * 4)
         self.rx_calls += 1
 
+    def enable_module(self, ch_id, enable: bool) -> None:
+        pass
+
     def close(self) -> None:
         self.closed = True
+
+
+class _FakeBladeRFSubmodule:
+    """Mimics bladerf._bladerf which hosts ChannelLayout and Format."""
+
+    class ChannelLayout:
+        RX_X1 = "RX_X1"
+
+    class Format:
+        SC16_Q11 = "SC16_Q11"
 
 
 class _FakeBladeRFModule:
@@ -433,6 +446,8 @@ class _FakeBladeRFModule:
 
     def __init__(self) -> None:
         self._last_device: "_FakeBladeRFDevice | None" = None
+        # Mimic bladerf._bladerf submodule (hosts ChannelLayout and Format).
+        self._bladerf = _FakeBladeRFSubmodule()
 
     def BladeRF(self) -> _FakeBladeRFDevice:
         self._last_device = _FakeBladeRFDevice()
@@ -441,12 +456,6 @@ class _FakeBladeRFModule:
     @staticmethod
     def CHANNEL_RX(n: int) -> int:
         return n
-
-    class ChannelLayout:
-        RX_X1 = "RX_X1"
-
-    class Format:
-        SC16_Q11 = "SC16_Q11"
 
 
 # ---------------------------------------------------------------------------

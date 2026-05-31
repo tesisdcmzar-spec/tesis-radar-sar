@@ -233,3 +233,44 @@ git commit && git push                       # commits 232ef92, 31bc9ee
 **Hardware actions:** None. No code changes. No RF. No USB.
 
 **What to read next:** `reports/session_reports/2026-05-31_thesis_docs_audit_after_phase3_rx.md` (sections 9 and 10) and `thesis/README_thesis_structure.md`.
+
+---
+
+## Session 2026-05-31 (Phase 3 — first supervised real RX-only smoke test)
+
+**Goal:** Run the first real bladeRF RX-only capture under user supervision.
+
+**Hardware actions:** Real bladeRF device opened (USB). RX channel configured and captured. No TX. No RF transmitted. No motor movement. No human subject. Not a SAR scan. Not a medical test.
+
+**Bugs found and fixed in this session:**
+1. `_capture_rx_real`: `ChannelLayout`/`Format` enums accessed as `mod._bladerf.ChannelLayout` (correct) not `mod.ChannelLayout` (wrong — not at top-level bladerf).
+2. `configure_rx` (real mode): missing `enable_module(CHANNEL_RX(0), True)` before sync streaming — caused `TimeoutError` on first run.
+3. `close` (real mode): added `enable_module(CHANNEL_RX(0), False)` before `device.close()`.
+4. `_FakeBladeRFDevice` test fake: added `enable_module(ch_id, enable)` method.
+5. `_FakeBladeRFModule` test fake: added `_bladerf` submodule (`_FakeBladeRFSubmodule`) with `ChannelLayout` and `Format`.
+
+**Files created:**
+- [`experiments/run_bladerf_rx_smoke_test.py`](../experiments/run_bladerf_rx_smoke_test.py) — supervised RX-only smoke test script.
+- [`reports/session_reports/2026-05-31_first_real_rx_smoke_test.md`](session_reports/2026-05-31_first_real_rx_smoke_test.md) — Spanish session report.
+
+**Files modified:**
+- [`hardware/bladerf_device.py`](../hardware/bladerf_device.py) — enable_module fix, ChannelLayout/Format path fix, close cleanup.
+- [`tests/test_bladerf_device.py`](../tests/test_bladerf_device.py) — fake backend updated to match real API.
+
+**Capture result:**
+- IQ shape: (100000,)  dtype: complex128
+- Mean amplitude: 0.00336  Max: 0.01424  RMS: 0.00386
+- Clipping ratio: 0.0 (no clipping at 20 dB gain)
+- DC offset magnitude: 0.00039 (normal for direct-conversion SDR)
+- Strongest FFT bin: DC (+0.0 MHz), -68.3 dB — environmental noise floor, no coherent target signal
+
+**Local outputs (not committed):**
+- `data/raw/rx_smoke/20260531_161436/rx_iq.npy`
+- `data/raw/rx_smoke/20260531_161436/metadata.json`
+- `reports/generated/bladerf_rx_smoke_time_domain.png`
+- `reports/generated/bladerf_rx_smoke_spectrum.png`
+- `reports/generated/bladerf_rx_smoke_summary.md`
+
+**Test results:** 82/82 passed (no regressions).
+
+**Next step:** Supervised multi-frequency SFCW sweep — capture one IQ burst per frequency step, build H(f, x_az) matrix. No TX yet.

@@ -238,17 +238,20 @@ class BladeRFDevice:
         """
         self._assert_open()
         if not self._config.dry_run:
-            ch = self._device.Channel(self._bladerf_mod.CHANNEL_RX(0))
+            rx_ch = self._bladerf_mod.CHANNEL_RX(0)
+            ch = self._device.Channel(rx_ch)
             ch.frequency = int(self._config.center_freq_hz)
             ch.sample_rate = int(self._config.sample_rate_hz)
             ch.bandwidth = int(self._config.bandwidth_hz)
             ch.gain = int(self._config.rx_gain_db)
+            # Enable the RX module so sync_rx streaming can proceed.
+            self._device.enable_module(rx_ch, True)
             self._log.append(
                 f"configure_rx: "
                 f"f={self._config.center_freq_hz/1e6:.1f} MHz, "
                 f"fs={self._config.sample_rate_hz/1e6:.1f} MS/s, "
                 f"bw={self._config.bandwidth_hz/1e6:.1f} MHz, "
-                f"gain={self._config.rx_gain_db:.1f} dB"
+                f"gain={self._config.rx_gain_db:.1f} dB  [module enabled]"
             )
         else:
             self._log.append(
@@ -345,9 +348,12 @@ class BladeRFDevice:
         'CONFIRM HARDWARE RUN' at BladeRFDevice construction.
         """
         n = self._config.n_samples
+        # ChannelLayout and Format live in the _bladerf C-extension submodule,
+        # not at the top-level bladerf package.
+        _api = self._bladerf_mod._bladerf
         self._device.sync_config(
-            layout=self._bladerf_mod.ChannelLayout.RX_X1,
-            fmt=self._bladerf_mod.Format.SC16_Q11,
+            layout=_api.ChannelLayout.RX_X1,
+            fmt=_api.Format.SC16_Q11,
             num_buffers=16,
             buffer_size=8192,
             num_transfers=8,
@@ -413,6 +419,11 @@ class BladeRFDevice:
         """Release the device and mark it closed."""
         if not self._closed:
             if not self._config.dry_run and self._device is not None:
+                # Disable RX module before closing to avoid libusb warnings.
+                try:
+                    self._device.enable_module(self._bladerf_mod.CHANNEL_RX(0), False)
+                except Exception:
+                    pass
                 self._device.close()
             self._log.append(
                 "[DRY-RUN] close: device closed." if self._config.dry_run

@@ -156,9 +156,124 @@ El pipeline de procesamiento no requiere modificaciones: `SyntheticScan` es el p
 
 ---
 
-## 5.9 Qué valida esta fase y qué no
+## 5.9 Fase 3b: Ruta de captura RX real preparada
 
-### Validado
+La Fase 3a estableció el andamiaje de abstracción y seguridad: `BladeRFConfig`, `BladeRFDevice`, modo dry-run y la compuerta de confirmación.  La Fase 3b extiende `hardware/bladerf_device.py` con la implementación completa de la ruta de captura RX real, sin ejecutar ninguna operación sobre hardware físico.  Los tres elementos nuevos son: un helper de conversión de formato de muestra (`sc16q11_to_complex`), un mecanismo de importación diferida (`_import_bladerf`) y la ruta de captura privada (`_capture_rx_real`).  Un cuarto elemento —la inyección de backend falso— permite ejercer esta ruta en tests sin USB.
+
+### 5.9.1 Formato de muestras SC16_Q11 y conversión a IQ
+
+El bladeRF transfiere muestras IQ en formato **SC16_Q11** (*Signed 16-bit, Q1.11 fixed-point*).  Cada muestra IQ ocupa 4 bytes: dos enteros de 16 bits con signo intercalados en el orden [I, Q].  El layout en memoria de una captura de *N* muestras es:
+
+```
+[I₀, Q₀, I₁, Q₁, ..., I_{N-1}, Q_{N-1}]   dtype: int16, longitud: 2N
+```
+
+El rango de valores es [−2048, +2047], correspondiente al formato Q1.11 (11 bits fraccionarios, escala 2¹¹ = 2048).  Para obtener amplitud normalizada ≈ [−1, +1), se divide por 2048.0.
+
+La función `sc16q11_to_complex` realiza esta conversión:
+
+```python
+def sc16q11_to_complex(raw: np.ndarray) -> np.ndarray:
+    raw_i16 = raw.astype(np.int16, copy=False)
+    i_ch = raw_i16[0::2].astype(np.float64)   # componente I
+    q_ch = raw_i16[1::2].astype(np.float64)   # componente Q
+    return (i_ch + 1j * q_ch) / 2048.0
+```
+
+La función es independiente del hardware: acepta cualquier array NumPy 1-D de longitud par y devuelve un array `complex128` de shape `(N//2,)`.  Lanza `ValueError` si el array no es 1-D o tiene longitud impar.
+
+La elección de `float64` (no `float32`) es deliberada: el pipeline SAR opera en `complex128` para preservar la precisión de fase en la retroproyección.  Este factor de normalización 2048 es coherente con los parámetros de las capturas legacy documentados en §4.1.2 de `cap4_adquisicion.md`, garantizando compatibilidad entre la ruta nueva y los datos históricos.
+
+### 5.9.2 Importación diferida de las bindings Python (`_import_bladerf`)
+
+Las bindings Python del bladeRF (`import bladerf`) intentan acceder al driver USB en el momento de la importación.  Si el módulo `hardware/bladerf_device.py` contuviera `import bladerf` como sentencia de nivel superior, cualquier script de procesamiento que importara este módulo fallaría en máquinas sin bladeRF, violando el principio de separación hardware/software establecido en §5.1.
+
+La función `_import_bladerf` resuelve este problema mediante `importlib.import_module`:
+
+```python
+import importlib  # stdlib — siempre disponible
+
+def _import_bladerf():
+    try:
+        return importlib.import_module("bladerf")
+    except ImportError as exc:
+        raise ImportError(
+            "bladeRF Python bindings not found.  "
+            "Install with: pip install bladerf\n"
+            "Or build from source: https://github.com/Nuand/bladeRF"
+        ) from exc
+```
+
+`_import_bladerf()` es invocada **únicamente** dentro de `BladeRFDevice.__init__()`, y solo si se cumplen simultáneamente tres condiciones:
+
+1. `config.dry_run == False` — el modo dry-run nunca la invoca.
+2. `confirmation == "CONFIRM HARDWARE RUN"` — la compuerta de seguridad ya fue validada.
+3. `_bladerf_module is None` — no se inyectó un módulo falso de test.
+
+El test `test_no_bladerf_import_in_bladerf_device_module` verifica mediante expresión regular sobre el código fuente que la cadena `import bladerf` o `from bladerf` nunca aparece como sentencia de nivel de módulo en `hardware/bladerf_device.py`.
+
+### 5.9.3 Flujo de captura `_capture_rx_real`
+
+El método privado `_capture_rx_real` implementa la captura RX real usando la interfaz *sync* de libbladeRF.  El procedimiento consta de cuatro pasos:
+
+1. **Configurar la interfaz sync**: llama a `sync_config` con `ChannelLayout.RX_X1` (un canal RX), formato `Format.SC16_Q11`, 16 buffers de 8192 muestras, 8 transferencias concurrentes y timeout de 3500 ms.
+2. **Alocar el buffer de recepción**: `bytearray(n * 4)` — 4 bytes por muestra (2 × int16).
+3. **Llenar el buffer**: `sync_rx(buf, n)` transfiere *n* muestras SC16_Q11 desde el ADC al buffer.
+4. **Convertir**: `np.frombuffer(buf, dtype=np.int16)` interpreta el buffer como array int16; `sc16q11_to_complex(raw)` produce el array `complex128` final.
+
+```python
+def _capture_rx_real(self) -> np.ndarray:
+    n = self._config.n_samples
+    self._device.sync_config(
+        layout=self._bladerf_mod.ChannelLayout.RX_X1,
+        fmt=self._bladerf_mod.Format.SC16_Q11,
+        num_buffers=16,
+        buffer_size=8192,
+        num_transfers=8,
+        stream_timeout=3500,
+    )
+    buf = bytearray(n * 4)
+    self._device.sync_rx(buf, n)
+    raw = np.frombuffer(buf, dtype=np.int16)
+    return sc16q11_to_complex(raw)
+```
+
+Los parámetros `num_buffers=16`, `buffer_size=8192`, `num_transfers=8` y `stream_timeout=3500` provienen directamente de las capturas legacy documentadas en §4.1.2.
+
+> **Estado:** esta ruta está implementada y ejercida mediante tests con backend falso.  **No ha sido ejecutada sobre hardware real.**  La primera ejecución requiere bladeRF físicamente conectado, `pip install bladerf` y la frase `"CONFIRM HARDWARE RUN"` en la sesión.
+
+### 5.9.4 Inyección de backend falso para tests
+
+Para ejercer `_capture_rx_real` sin hardware, `BladeRFDevice.__init__` acepta el parámetro interno `_bladerf_module`.  Cuando se pasa un objeto en este parámetro, reemplaza al módulo devuelto por `_import_bladerf()`.
+
+Los tests definen tres clases auxiliares:
+
+| Clase | Simula | Atributos / métodos clave |
+|-------|--------|---------------------------|
+| `_FakeChannel` | Canal RX del bladeRF | `frequency`, `sample_rate`, `bandwidth`, `gain` |
+| `_FakeBladeRFDevice` | Dispositivo bladeRF | `Channel()`, `sync_config()`, `sync_rx()`, `close()` |
+| `_FakeBladeRFModule` | Módulo Python `bladerf` | `BladeRF()`, `CHANNEL_RX()`, `ChannelLayout.RX_X1`, `Format.SC16_Q11` |
+
+El patrón de inyección es:
+
+```python
+fake_mod = _FakeBladeRFModule()
+cfg = BladeRFConfig(dry_run=False, center_freq_hz=2.4e9, n_samples=1000)
+dev = BladeRFDevice(cfg, confirmation="CONFIRM HARDWARE RUN",
+                    _bladerf_module=fake_mod)
+dev.configure_rx()
+iq = dev.capture_rx()
+assert iq.shape == (1000,)
+assert iq.dtype == np.complex128
+```
+
+Esto verifica que `configure_rx` aplica correctamente los parámetros al canal y que `capture_rx` produce un array de shape y dtype correctos, sin abrir ningún dispositivo USB ni importar las bindings reales.
+
+---
+
+## 5.10 Qué valida esta fase y qué no
+
+### Validado — Fase 3a (abstracción dry-run)
 
 - La arquitectura de abstracción hardware es correcta y testeable sin bladeRF.
 - Los validadores de seguridad rechazan parámetros fuera de rango.
@@ -166,17 +281,32 @@ El pipeline de procesamiento no requiere modificaciones: `SyntheticScan` es el p
 - El modo dry-run produce datos compatibles con el pipeline de procesamiento.
 - Todos los módulos de hardware pueden importarse sin el bladeRF presente.
 
+### Validado — Fase 3b (ruta RX real preparada)
+
+- `sc16q11_to_complex` es correcta para ceros, valores conocidos, normalización y valores negativos.
+- `sc16q11_to_complex` rechaza arrays no-1D y de longitud impar con `ValueError`.
+- `sc16q11_to_complex` devuelve `complex128` de shape `(N//2,)`.
+- `_import_bladerf` lanza `ImportError` descriptivo cuando el paquete no está instalado.
+- La ruta real (`_capture_rx_real`) se construye y ejecuta correctamente con backend falso inyectado.
+- `configure_rx` en modo real aplica frecuencia, tasa de muestreo, ancho de banda y ganancia al canal.
+- `capture_rx` en modo real devuelve un array `complex128` de shape `(n_samples,)`.
+- `close` en modo real llama al método `close()` del backend.
+- Ninguna sentencia `import bladerf` existe a nivel de módulo (verificado por test regex).
+- Sin regresiones: suite completa 82/82 tests aprobados.
+
 ### No validado
 
+- La comunicación USB real con el bladeRF (ninguna captura RX fue ejecutada sobre hardware).
 - El rendimiento del bladeRF bajo condiciones reales de RF.
-- La coherencia entre barridos sucesivos.
+- La coherencia de fase entre barridos sucesivos.
 - La estabilidad del oscilador local bajo temperatura.
 - La transferencia USB a tasas máximas de muestreo.
 - El comportamiento del amplificador TX bajo carga.
+- La corrección `sc16q11_to_complex` sobre muestras reales del ADC.
 
 ---
 
-## 5.10 Nota sobre numeración de capítulos
+## 5.11 Nota sobre numeración de capítulos
 
 El capítulo `thesis/cap4_adquisicion.md` cubre el diseño del sistema de adquisición SFCW. El presente capítulo (`cap5`) describe la implementación de la capa de abstracción hardware. Al integrar todos los capítulos en el documento final de tesis, es necesario revisar la numeración para que la secuencia lógica sea:
 
