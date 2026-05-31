@@ -5,8 +5,8 @@ phantom:
   # Point targets defined as (cross-range x_m, down-range z_m) in meters,
   # measured from aperture center and aperture plane respectively.
   targets:
-    - {x_m:  0.00, z_m: 0.10}   # on-axis target at 10 cm range
-    - {x_m:  0.05, z_m: 0.12}   # off-axis target, slightly deeper
+    - {x_m: -0.06, z_m: 0.09}   # left, 9 cm range  — separation > 7.5 cm resolution cell
+    - {x_m:  0.06, z_m: 0.19}   # right, 19 cm range — 10 cm range sep, 12 cm cross-range sep
   medium_permittivity: 1.0       # free space / air background
   target_rcs: 1.0                # relative radar cross section (normalized)
 

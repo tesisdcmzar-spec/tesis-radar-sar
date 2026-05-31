@@ -37,9 +37,17 @@ def _db(amp: np.ndarray) -> np.ndarray:
 
 
 def _save_range_profile_figure(
-    scan, range_m_rect, profiles_rect, range_m_han, profiles_han, out_path: pathlib.Path
+    phantom, scan, range_m_rect, profiles_rect, range_m_han, profiles_han, out_path: pathlib.Path
 ) -> None:
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+    # Slant range to each target from the center aperture position
+    x_center = scan.x_az_m[len(scan.x_az_m) // 2]
+    slant_ranges_cm = [
+        np.sqrt((x_center - t.x_m)**2 + t.z_m**2) * 100
+        for t in phantom.targets
+    ]
+    target_colors = ['r', 'orange', 'lime', 'cyan']
 
     for ax, range_m, profiles, label in [
         (axes[0], range_m_rect, profiles_rect, "Rectangular window (best resolution)"),
@@ -47,16 +55,21 @@ def _save_range_profile_figure(
     ]:
         center = profiles.shape[1] // 2
         ax.plot(range_m * 100, np.abs(profiles[:, center]), label="center aperture")
+        for i, (t, sr) in enumerate(zip(phantom.targets, slant_ranges_cm)):
+            ax.axvline(sr, color=target_colors[i], lw=0.9, ls='--',
+                       label=f"T{i+1} slant range ({sr:.1f} cm)")
         ax.set_xlabel("Range [cm]")
         ax.set_ylabel("Amplitude [a.u.]")
         ax.set_title(label)
-        ax.set_xlim(0, 30)
+        ax.set_xlim(0, max(slant_ranges_cm) * 1.6)
         ax.grid(True, alpha=0.4)
-        ax.axvline(10, color='r', lw=0.8, ls='--', label="target 1 (10 cm)")
-        ax.axvline(12, color='orange', lw=0.8, ls='--', label="target 2 (12 cm)")
         ax.legend(fontsize=8)
 
-    fig.suptitle("Range profiles — center aperture (two targets at 10 cm and 12 cm)")
+    t_desc = "  |  ".join(
+        f"T{i+1}: ({t.x_m*100:.0f}, {t.z_m*100:.0f}) cm"
+        for i, t in enumerate(phantom.targets)
+    )
+    fig.suptitle(f"Range profiles — center aperture  ({t_desc})")
     fig.tight_layout()
     fig.savefig(out_path, dpi=150)
     plt.close(fig)
@@ -183,14 +196,14 @@ def main() -> None:
     print(f"  Shape: {profiles_rect.shape}  range step={1e3*(range_m_rect[1]-range_m_rect[0]):.1f} mm")
 
     _save_range_profile_figure(
-        scan, range_m_rect, profiles_rect, range_m_han, profiles_han,
+        phantom, scan, range_m_rect, profiles_rect, range_m_han, profiles_han,
         out_dir / "range_profiles.png"
     )
 
     # ---- SAR reconstruction (both windows, zoomed ROI) -------------------
     # Zoom image to near-field phantom region with finer pixel grid
     x_img = np.linspace(-0.20, 0.20, 300)
-    z_img = np.linspace(0.02, 0.22, 300)
+    z_img = np.linspace(0.02, 0.26, 300)
 
     print(f"\nSAR reconstruction: backprojection")
     print(f"  Image grid: {len(x_img)} x {len(z_img)} pixels "
