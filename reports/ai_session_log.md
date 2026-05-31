@@ -74,6 +74,26 @@ git commit && git push                       # commits 232ef92, 31bc9ee
 
 ---
 
+## Session 2026-05-31 (Phase 2 — SFCW capture loader)
+
+**Goal:** Implement `acquisition/load_sfcw_capture.py` — bridge from real `.npy` captures to the existing simulation pipeline (`SyntheticScan`).
+
+**Key discovery:** 99 legacy files in `capturas_barrido/` are per-frequency IQ streams, not a 2D H matrix. Shape: `(40000,)` complex128, 100–5980 MHz at 60 MHz step, single aperture position only. Range profiles possible; SAR image blocked until azimuth scan data exists.
+
+**Files created:**
+- `acquisition/__init__.py` — package init
+- `acquisition/load_sfcw_capture.py` — loader supporting Format A (2D file), B (1D file), C (legacy directory). Public API: `load_capture(path, cfg, azimuth_position_m=0.0) -> SyntheticScan`.
+- `tests/test_load_sfcw_capture.py` — 18 unit tests (all synthetic fixtures, no hardware).
+- `reports/session_reports/2026-05-31_phase2_sfcw_loader.md` — intermediate English report.
+
+**Test results:** 30/30 passed (18 new + 12 existing, no regressions).
+**Commit:** `4fd93a1` — pushed to `origin/main`.
+**Next step:** `processing/background_subtraction.py` — required before any real-hardware phantom experiment.
+
+**Full session report:** [reports/session_reports/2026-05-31_loader_capturas_sfcw.md](session_reports/2026-05-31_loader_capturas_sfcw.md)
+
+---
+
 ## Session 2026-05-31 (retrospective report + session close)
 
 **Goal:** Generate a thesis-grade retrospective engineering report covering all simulation work from 2026-05-30; then write the formal session-close report for today.
