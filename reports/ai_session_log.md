@@ -71,3 +71,16 @@ git commit && git push                       # commits 232ef92, 31bc9ee
 **Open issues:** None blocking.
 
 **Next recommended step (Phase 2):** Write a loader (`acquisition/load_sfcw_capture.py`) that reads the real `.npy` captures from `legacy/capturas_barrido/` into a `SyntheticScan`-compatible H(f, x_az) array, then run the existing processing pipeline on real data.
+
+---
+
+## Session 2026-05-31 (retrospective report)
+
+**Goal:** Generate a thesis-grade retrospective engineering report in Spanish covering all simulation work done on 2026-05-30.
+
+**Files created:**
+- `reports/session_reports/2026-05-30_simulation_pipeline_resolution_and_thesis_draft.md` — 20-section report in Spanish covering: signal model derivation, double-path phase factor, IFFT range profiles, backprojection algorithm, carrier phase correction, YAML/encoding bugs, window resolution tradeoff, target separation rationale, figure interpretation, test coverage, Chapter 3 summary, thesis impact, limitations, and next steps.
+
+**Hardware actions:** None. Report only.
+
+**Full retrospective report:** `reports/session_reports/2026-05-30_simulation_pipeline_resolution_and_thesis_draft.md`
