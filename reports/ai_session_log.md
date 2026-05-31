@@ -274,3 +274,45 @@ git commit && git push                       # commits 232ef92, 31bc9ee
 **Test results:** 82/82 passed (no regressions).
 
 **Next step:** Supervised multi-frequency SFCW sweep — capture one IQ burst per frequency step, build H(f, x_az) matrix. No TX yet.
+
+---
+
+## Session 2026-05-31 (Phase 3 — supervised RX-only frequency survey)
+
+**Goal:** Characterize bladeRF RX behavior across 7 frequencies (900 MHz – 5 GHz). Receiver diagnostic only — not radar.
+
+**Hardware actions:** Real bladeRF device opened and closed 7 times (once per frequency). RX-only. No TX. No RF transmitted. No motor movement. No human subject. Not a SAR scan. Not a medical test.
+
+**Files created:**
+- [`experiments/run_bladerf_rx_frequency_survey.py`](../experiments/run_bladerf_rx_frequency_survey.py) — RX frequency survey script.
+- [`reports/session_reports/2026-05-31_rx_frequency_survey.md`](session_reports/2026-05-31_rx_frequency_survey.md) — Spanish session report.
+
+**Per-frequency results (7/7 successful):**
+
+| Freq (MHz) | RMS | DC mag | Peak (dB) | Classification |
+|------------|-----|--------|-----------|----------------|
+| 900 | 0.00423 | 0.00035 | -69.2 | noise-like |
+| 1200 | 0.00678 | 0.00036 | -68.9 | noise-like |
+| 1800 | 0.00385 | 0.00039 | -68.2 | noise-like |
+| 2400 | 0.00379 | 0.00038 | -68.5 | noise-like |
+| 3000 | 0.00381 | 0.00037 | -68.7 | noise-like |
+| 4000 | 0.00370 | 0.00003 | -80.4 | noise-like |
+| 5000 | 0.00432 | 0.00081 | -61.8 | noise-like |
+
+**Key observations:**
+- All captures: noise-like; no clipping (0.000% at all frequencies); gain=20 dB is appropriate.
+- RMS noise floor consistent ~0.0037–0.0068 across the range — receiver is functional.
+- 1200 MHz: slightly elevated RMS (0.00678) and max (0.0315), likely LTE/GPS activity.
+- 4000 MHz: DC offset ~0 (0.00003); strongest bin at -4667 kHz from center (possible FPGA decimation artifact or OOB signal).
+- 5000 MHz: peak at -61.8 dB (highest in survey), consistent with WiFi 5 GHz activity.
+
+**Local outputs (not committed):**
+- `data/raw/rx_frequency_survey/20260531_162522/` — 7 .npy files + metadata.json
+- `reports/generated/bladerf_rx_frequency_survey_noise_floor.png`
+- `reports/generated/bladerf_rx_frequency_survey_dc_offset.png`
+- `reports/generated/bladerf_rx_frequency_survey_peak_bins.png`
+- `reports/generated/bladerf_rx_frequency_survey_summary.md`
+
+**Test results:** 82/82 passed (no regressions).
+
+**Next step:** Supervised SFCW sweep (RX-only) over a narrow band (e.g. 2.3–2.5 GHz, 1 MHz steps) to build H(f) and compute range profile. No TX yet.
