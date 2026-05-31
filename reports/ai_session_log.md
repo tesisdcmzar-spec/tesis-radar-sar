@@ -107,3 +107,38 @@ git commit && git push                       # commits 232ef92, 31bc9ee
 **Commits:** `755763c` (retrospective report, pushed to origin/main). Session-close report pending commit.
 
 **Full session-close report:** `reports/session_reports/2026-05-31_sesion_informe_retrospectivo_simulacion.md`
+
+---
+
+## Session 2026-05-31 (Phase 2 Offline — closure)
+
+**Goal:** Close the entire offline phase: legacy capture inspection, offline analysis script, range profile figures, thesis note, closure report, and updated tests.
+
+**Legacy capture inspection results:**
+- 99 files in `legacy/capturas_barrido/`, shape `(40000,)` complex128 each.
+- Filename pattern: `cap_NNN_XXXMHz.npy`, range 100–5980 MHz, step 60 MHz.
+- BW = 5880 MHz → range resolution ≈ 2.55 cm; unambiguous range = 2.50 m.
+- Single azimuth position only — no SAR 2D image possible from this data.
+- Total size: 63.4 MB; all loaded with `mmap_mode='r'` only.
+
+**Files created:**
+- [`experiments/run_legacy_offline_analysis.py`](../experiments/run_legacy_offline_analysis.py) — offline analysis script: loads legacy captures via `load_capture()`, computes H(f) and range profiles (rectangular + Hanning, ×8 zero-pad), saves 4 figures + Markdown summary to `reports/generated/`.
+- [`thesis/cap4_validacion_offline_legacy.md`](../thesis/cap4_validacion_offline_legacy.md) — Spanish academic thesis note: IQ-to-H(f) derivation, SyntheticScan bridge, 1D range analysis, why SAR 2D is impossible with single aperture, transition to hardware.
+- [`reports/session_reports/2026-05-31_phase2_offline_closure.md`](2026-05-31_phase2_offline_closure.md) — Spanish engineering closure report (14 sections): inspection, workflow, figures, tests, what is/isn't validated, next hardware phase.
+
+**Files modified:**
+- [`tests/test_load_sfcw_capture.py`](../tests/test_load_sfcw_capture.py) — added `test_sfcw_point_target_range_peak_in_format_c`: synthetic SFCW point-target signal through Format-C loader → range profile peak within ±5 cm of R₀ = 1.0 m.
+- [`reports/ai_session_log.md`](ai_session_log.md) — this entry.
+
+**Generated local figures** (gitignored, regenerate with script):
+- `reports/generated/legacy_frequency_response.png`
+- `reports/generated/legacy_range_profile_rectangular.png`
+- `reports/generated/legacy_range_profile_hanning.png`
+- `reports/generated/legacy_range_profile_comparison.png`
+- `reports/generated/legacy_offline_summary.md`
+
+**Test results:** ≥ 31 tests passed (30 prior + 1 new), no regressions.
+
+**Hardware actions:** None. Fully offline. No RF, no motors, no bladeRF API.
+
+**Next step (Phase 3):** `hardware/bladerf_device.py` — safe bladeRF abstraction with dry-run mode and explicit `CONFIRM HARDWARE RUN` gate before any RF transmission.

@@ -246,3 +246,47 @@ def test_no_bladerf_import_in_loader():
     # Allow the word in docstrings/comments; reject actual import statements.
     assert not re.search(r"^\s*(import|from)\s+bladerf", src, re.MULTILINE), \
         "acquisition.load_sfcw_capture must not import bladeRF"
+
+
+# ---------------------------------------------------------------------------
+# Offline analysis smoke test
+# ---------------------------------------------------------------------------
+
+def test_sfcw_point_target_range_peak_in_format_c(tmp_path, cfg5x3):
+    """
+    A synthetic Format-C directory where IQ = exp(-j*4*pi*f*R0/c) for each
+    frequency must yield a range-profile peak within ±5 cm of R0.
+
+    This validates the full chain:
+        _load_legacy_directory → SyntheticScan → compute_range_profiles
+    for coherent SFCW data with a known target range.
+    """
+    from processing.range_profile import compute_range_profiles
+    from experiments.run_legacy_offline_analysis import (
+        compute_sfcw_performance, profile_peak_range_m,
+    )
+
+    C = 3e8
+    R0 = 1.0          # target at 1.0 m
+    freqs_mhz = list(range(100, 6001, 60))   # 100–6000 MHz, 60 MHz step → 100 files
+
+    cap_dir = tmp_path / "sfcw_target"
+    cap_dir.mkdir()
+    for i, f_mhz in enumerate(freqs_mhz):
+        f_hz = f_mhz * 1e6
+        # Coherent CW response of a point target at range R0
+        h_val = np.exp(-1j * 4 * np.pi * f_hz * R0 / C)
+        iq = np.full(10, h_val, dtype=np.complex128)
+        np.save(str(cap_dir / f"cap_{i:03d}_{f_mhz}MHz.npy"), iq)
+
+    scan = load_capture(cap_dir, cfg={})
+
+    perf = compute_sfcw_performance(scan.freqs_hz)
+    range_m, profiles = compute_range_profiles(scan, padding_factor=8, window="none")
+    peak_m = profile_peak_range_m(range_m, np.abs(profiles[:, 0]))
+
+    # Peak must be within ±5 cm (two resolution cells of the 2.5 cm theory)
+    assert abs(peak_m - R0) < 0.05, (
+        f"Range peak at {peak_m:.4f} m is too far from R0={R0} m "
+        f"(range_res ≈ {perf['range_res_m']*100:.2f} cm)"
+    )
