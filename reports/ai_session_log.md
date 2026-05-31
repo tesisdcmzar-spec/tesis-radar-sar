@@ -74,13 +74,16 @@ git commit && git push                       # commits 232ef92, 31bc9ee
 
 ---
 
-## Session 2026-05-31 (retrospective report)
+## Session 2026-05-31 (retrospective report + session close)
 
-**Goal:** Generate a thesis-grade retrospective engineering report in Spanish covering all simulation work done on 2026-05-30.
+**Goal:** Generate a thesis-grade retrospective engineering report covering all simulation work from 2026-05-30; then write the formal session-close report for today.
 
 **Files created:**
-- `reports/session_reports/2026-05-30_simulation_pipeline_resolution_and_thesis_draft.md` — 20-section report in Spanish covering: signal model derivation, double-path phase factor, IFFT range profiles, backprojection algorithm, carrier phase correction, YAML/encoding bugs, window resolution tradeoff, target separation rationale, figure interpretation, test coverage, Chapter 3 summary, thesis impact, limitations, and next steps.
+- `reports/session_reports/2026-05-30_simulation_pipeline_resolution_and_thesis_draft.md` — 20-section retrospective in Spanish (631 lines): signal model, double-path phase, IFFT profiles, backprojection, carrier correction, YAML/encoding bugs, window resolution tradeoff, target separation, figures, tests, Chapter 3, thesis impact, limitations, next steps.
+- `reports/session_reports/2026-05-31_sesion_informe_retrospectivo_simulacion.md` — formal 15-section session-close report for today's documentation session.
 
-**Hardware actions:** None. Report only.
+**Hardware actions:** None. Documentation only.
 
-**Full retrospective report:** `reports/session_reports/2026-05-30_simulation_pipeline_resolution_and_thesis_draft.md`
+**Commits:** `755763c` (retrospective report, pushed to origin/main). Session-close report pending commit.
+
+**Full session-close report:** `reports/session_reports/2026-05-31_sesion_informe_retrospectivo_simulacion.md`
