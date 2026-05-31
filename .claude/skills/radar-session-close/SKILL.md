@@ -2,7 +2,7 @@
 name: radar-session-close
 description: Cierra una sesión de trabajo generando un informe técnico completo de ingeniería para la tesis Radar SAR.
 disable-model-invocation: true
-------------------------------
+---
 
 Crear o actualizar un informe de sesión detallado para la tesis.
 
