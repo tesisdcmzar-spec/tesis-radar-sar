@@ -164,10 +164,11 @@ La separación en rango entre T1 ($z=9$ cm) y T2 ($z=19$ cm) es $\Delta z = 10\,
 
 ## 3.8 Trabajo Futuro Inmediato
 
-1. Conectar el pipeline de procesamiento existente con capturas reales del bladeRF mediante un cargador de datos (`acquisition/load_sfcw_capture.py`) que lea los archivos `.npy` de `legacy/capturas_barrido/` y los adapte al formato `SyntheticScan[N_f, N_az]`.
-2. Comparar perfiles de rango simulados versus medidos para un blanco de referencia conocido (p.ej., esfera metálica o alambre).
-3. Cuantificar la resolución transversal mediante el ancho a −3 dB del lóbulo principal de un blanco puntual en la imagen SAR real.
-4. Evaluar el impacto del ruido real sobre la relación señal-a-ruido de los perfiles de rango.
+1. ~~Conectar el pipeline de procesamiento existente con capturas reales del bladeRF mediante un cargador de datos (`acquisition/load_sfcw_capture.py`) que lea los archivos `.npy` de `legacy/capturas_barrido/` y los adapte al formato `SyntheticScan[N_f, N_az]`.~~ **[Completado — commit `4fd93a1`. Ver Capítulo 4.]**
+2. Implementar substracción de fondo (`processing/background_subtraction.py`) para aislar la respuesta del phantom de las reflexiones estáticas del entorno antes de procesar datos reales.
+3. Comparar perfiles de rango simulados versus medidos para un blanco de referencia conocido (p.ej., esfera metálica o alambre).
+4. Cuantificar la resolución transversal mediante el ancho a −3 dB del lóbulo principal de un blanco puntual en la imagen SAR real.
+5. Evaluar el impacto del ruido real sobre la relación señal-a-ruido de los perfiles de rango.
 
 ---
 
