@@ -395,3 +395,60 @@ all print/console paths.
 **Next step:** First calibrated TX/RX experiment -- implement real TX path in
 `hardware/bladerf_device.py`, mount bladeRF with known reflector, measure S21,
 verify range-profile peak at expected distance.
+
+---
+
+## Session 2026-05-31 (SFCW post-processing + next-phase preparation)
+
+**Goal:** Convert the RX-only SFCW sweep into a validated engineering milestone and
+prepare the TX/RX next phase, without transmitting.
+
+**Hardware actions:** None. No bladeRF. No RF. No TX. No motors. No human subject.
+Pure offline analysis and infrastructure work.
+
+**Files created:**
+- [`processing/rx_sfcw_postprocess.py`](../processing/rx_sfcw_postprocess.py) --
+  hardware-independent postprocessing module: `remove_dc_component`,
+  `normalize_h_magnitude`, `subtract_reference_h`, `smooth_h_magnitude`,
+  `estimate_noise_floor_db`, `find_prominent_range_bins`, `summarize_range_profile`.
+  No bladeRF import. All docstrings explain RX-only H(f) is NOT a radar transfer function.
+- [`tests/test_rx_sfcw_postprocess.py`](../tests/test_rx_sfcw_postprocess.py) --
+  57 new unit tests (synthetic data only, no hardware).
+- [`experiments/analyze_latest_rx_sfcw_sweep.py`](../experiments/analyze_latest_rx_sfcw_sweep.py) --
+  offline analysis script: finds latest capture data (falls back to synthetic if absent),
+  applies postprocessing pipeline, generates 4 output files.
+- [`reports/session_reports/2026-05-31_rx_sfcw_postprocess_and_next_phase.md`](2026-05-31_rx_sfcw_postprocess_and_next_phase.md) --
+  Spanish session report (14 sections).
+- [`thesis/addendum_rx_only_sfcw_pipeline.md`](../thesis/addendum_rx_only_sfcw_pipeline.md) --
+  Spanish academic addendum for thesis chapters 6/7: methodology, results,
+  RX-only vs calibrated radar distinction, preparation for TX/RX phase.
+- [`docs/prompts/next_phase_tx_safety_plan.md`](../docs/prompts/next_phase_tx_safety_plan.md) --
+  Detailed TX safety plan: ordered steps (load test first, then antenna), per-step
+  requirements, frequency/power checklist, session prompt template.
+
+**Post-processing outputs (generated locally, not committed):**
+- `reports/generated/rx_sfcw_postprocess_h_comparison.png`
+- `reports/generated/rx_sfcw_postprocess_range_comparison.png`
+- `reports/generated/rx_sfcw_postprocess_peak_table.md`
+- `reports/generated/rx_sfcw_postprocess_summary.md`
+
+**Key technical findings:**
+- DC removal (`remove_dc_component`) eliminates the 0-range IFFT spike caused by
+  the mean of the noise H(f) vector; the range profile now shows the distributed noise floor.
+- Normalization and smoothing allow visual comparison of H(f) shapes between sweeps.
+- `find_prominent_range_bins` with +6 dB threshold detected a small number of bins
+  elevated above the median -- consistent with ISM interference, NOT physical targets.
+- Analysis script falls back to synthetic Gaussian noise if real data is absent,
+  keeping the pipeline runnable in any environment.
+
+**Scientific honesty:** H(f) from RX-only captures = coherent mean of environmental
+noise. Range profile = noise IFFT. No target detection. No SAR imaging. No clinical claims.
+
+**Test results:** 182/182 passed (57 new + 125 prior), no regressions.
+
+**Next step (next TX session):**
+1. Implement `configure_tx()` + `enable_tx()` in `hardware/bladerf_device.py` with safety locks.
+2. Run `experiments/run_bladerf_tx_load_test.py` -- TX into 50-ohm load, no antenna,
+   < 1 second, user present, explicit confirmation.
+3. If load test passes: first TX with antenna toward metallic reflector at known distance.
+4. See `docs/prompts/next_phase_tx_safety_plan.md` for complete ordered plan.
