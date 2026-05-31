@@ -1,0 +1,73 @@
+# AI Session Log — Radar SAR Thesis
+
+---
+
+## Session 2026-05-30
+
+**Goal:** Build the hardware-independent simulation pipeline (Phase 1 of thesis roadmap).
+
+**Files created (all new):**
+- `conftest.py` — root sys.path fix for pytest
+- `simulation/__init__.py`
+- `simulation/phantom_model.py` — `PhantomModel`, `PointTarget`, `phantom_from_config`
+- `simulation/synthetic_scan.py` — `SyntheticScan`, `make_scan`, `scan_from_config`
+- `processing/__init__.py`
+- `processing/range_profile.py` — IFFT range profile with Hanning window + zero-padding
+- `processing/sar_reconstruction.py` — backprojection SAR reconstruction + `image_grid_from_config`
+- `tests/test_simulation.py` — 12 unit tests
+- `experiments/run_simulation.py` — end-to-end script, saves figures to `reports/generated/`
+
+**Commands run:**
+```
+py -m pytest tests/test_simulation.py -v     # all tests
+py experiments/run_simulation.py             # figure generation
+git add ... && git commit                    # commit eb75b1e
+```
+
+**Test results:** 12/12 passed.
+
+**Figures generated:** `reports/generated/range_profiles.png`, `reports/generated/sar_image.png`.
+
+**Hardware actions:** None. Fully simulated.
+
+**Issues found and fixed:**
+1. Backprojection peak at wrong range (z=0.074 instead of z=0.10 m). Root cause: IFFT of a non-baseband SFCW signal (f_start=500 MHz) retains a carrier term exp(−j·4π·f_start·R/c) in the range profile. Fix: multiply each aperture contribution by exp(+j·4π·f_start·R_pixel/c) before coherent summation.
+2. PyYAML on this machine parses scientific notation (`5.0e6`, `3.0e8`) as strings. Fix: explicit `float()`/`int()` conversion on all config reads.
+3. Windows console encoding rejects Unicode arrows/symbols in f-strings. Fix: replaced with ASCII equivalents.
+
+**Open issues:** None blocking. `reports/generated/` is gitignored so figures are local only.
+
+**Next recommended step (Phase 2):** Write a loader (`acquisition/load_sfcw_capture.py`) that reads the real `.npy` captures from `legacy/capturas_barrido/` into the same `SyntheticScan`-compatible H(f, x_az) array, then run the existing processing pipeline on real data.
+
+---
+
+## Session 2026-05-30 (continued — resolution improvements)
+
+**Goal:** Improve SAR image resolution and demonstrate target resolving capability.
+
+**Files modified:**
+- `processing/range_profile.py` — replaced `window: bool` with `window: str` ('none', 'hanning', 'blackman'); 'none' = rectangular = 7.5 cm range resolution
+- `processing/sar_reconstruction.py` — updated `window` signature to match; zoomed default image grid from z=0.50 m to z=0.25 m
+- `tests/test_simulation.py` — updated `window=False` call to `window='none'`
+- `experiments/run_simulation.py` — default window changed to 'none' (best resolution); image grid zoomed to 2–26 cm range, 300×300 pixels; added `sar_window_comparison.png` side-by-side figure; range profile dashed lines made dynamic (slant range from center aperture per target)
+- `configs/simulation.yaml` — targets moved from (0,10)/(5,12) cm to (-6,9)/(6,19) cm to exceed the 7.5 cm resolution cell in both range (10 cm sep) and cross-range (12 cm sep)
+
+**Commands run:**
+```
+py -m pytest tests/test_simulation.py -v     # 12/12 passed
+py experiments/run_simulation.py             # regenerated all figures
+git commit && git push                       # commits 232ef92, 31bc9ee
+```
+
+**Test results:** 12/12 passed (no regressions).
+
+**Figures generated:**
+- `reports/generated/range_profiles.png` — rectangular vs Hanning 1D profiles with per-target slant-range markers
+- `reports/generated/sar_window_comparison.png` — side-by-side SAR images showing resolution vs sidelobe tradeoff
+- `reports/generated/sar_image.png` — best-resolution (rectangular window) image with both targets clearly resolved
+
+**Hardware actions:** None. Fully simulated.
+
+**Open issues:** None blocking.
+
+**Next recommended step (Phase 2):** Write a loader (`acquisition/load_sfcw_capture.py`) that reads the real `.npy` captures from `legacy/capturas_barrido/` into a `SyntheticScan`-compatible H(f, x_az) array, then run the existing processing pipeline on real data.
