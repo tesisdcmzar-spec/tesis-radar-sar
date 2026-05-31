@@ -207,3 +207,29 @@ git commit && git push                       # commits 232ef92, 31bc9ee
 **Hardware actions:** None. No bladeRF opened. No USB accessed. No RF transmitted. No motors moved.
 
 **Next step (Phase 3 — first supervised real RX):** Connect bladeRF, install `pip install bladerf`, connect RX antenna/load, user present, provide `confirmation="CONFIRM HARDWARE RUN"` in session.
+
+---
+
+## Session 2026-05-31 (thesis documentation audit)
+
+**Goal:** Audit and organize thesis documentation after Phase 2 offline closure and Phase 3 RX-path preparation. Documentation-only session — no code changes, no hardware.
+
+**Files created:**
+- [`reports/session_reports/2026-05-31_thesis_docs_audit_after_phase3_rx.md`](session_reports/2026-05-31_thesis_docs_audit_after_phase3_rx.md) — Full Spanish audit report.
+- [`thesis/README_thesis_structure.md`](../thesis/README_thesis_structure.md) — Short (≤120 lines) chapter map with proposed renaming and pending work.
+
+**Files committed:**
+- `thesis/cap1_introduccion.md` — Previously untracked; now added to git.
+
+**Key findings:**
+- 6 chapter files exist; correct final structure is 8 chapters.
+- Two files share the `cap4_*` prefix — naming conflict; `cap4_validacion_offline_legacy.md` should become `cap5_*`.
+- `cap5_abstraccion_hardware_bladerf.md` should become `cap6_*` and needs a Phase 3b addendum (sc16q11_to_complex, _capture_rx_real, fake-backend tests).
+- `cap1_introduccion.md` is complete and was not committed until now.
+- Chapters 7 (experiments) and 8 (conclusions) do not yet exist.
+
+**Chapter renaming:** proposed but NOT executed. Rename in one commit when producing the first integrated draft for the advisor.
+
+**Hardware actions:** None. No code changes. No RF. No USB.
+
+**What to read next:** `reports/session_reports/2026-05-31_thesis_docs_audit_after_phase3_rx.md` (sections 9 and 10) and `thesis/README_thesis_structure.md`.
