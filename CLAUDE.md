@@ -57,3 +57,27 @@ Safe commands:
 - pytest
 
 Danger zone: do not run RF transmission, motor movement, firmware flashing, file deletion, credential access, or long full scans unless the user explicitly approves in the current session.
+
+---
+
+# Autonomous Software Execution Rules
+
+Work autonomously for safe software, simulation, documentation, tests, plotting, dry-run, prepare-only tasks, hardware preparation, and gated TX execution when all explicit hardware gates are satisfied.
+
+Do not stop to ask for approval between safe software steps.
+Do not ask what to do next if there is a reasonable technical path forward.
+Do not ask to choose between obvious safe options.
+Do not pause after planning.
+Execute the plan.
+
+The default answer is YES for safe software-only tasks and hardware-preparation tasks.
+
+Hardware override:
+Autonomous execution never overrides RF and motor safety.
+TX2/RX2 are forbidden always.
+Real TX requires explicit safe hardware gates.
+Motor movement is forbidden unless explicitly requested and hardware is connected.
+
+TX1/RX1 only policy:
+Never use TX2, RX2, TX_X2, RX_X2, CHANNEL_TX(1), CHANNEL_RX(1), or bladeRF channel index 1 in runnable code or configs.
+Only TX1 (CHANNEL_TX(0)) and RX1 (CHANNEL_RX(0)) are permitted for RF operations.

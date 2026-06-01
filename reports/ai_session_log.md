@@ -2,6 +2,37 @@
 
 ---
 
+## Session 2026-06-01 (Phase 5 -- dielectric contrast heatmap software sprint)
+
+**Goal:** Implement 2D dielectric contrast heatmap pipeline using simulated UWB-OFDM-SAR.
+
+**Tests:** 446/446 passed (+59 new tests for dielectric_contrast_heatmap and phantom_permittivity_map).
+
+**New files created:**
+- `simulation/phantom_permittivity_map.py` -- DielectricInclusion, DielectricPhantom, Fresnel model, make_two_inclusion_phantom().
+- `processing/dielectric_contrast_heatmap.py` -- sar_image_to_contrast_heatmap, compare_heatmaps, locate_contrast_peaks_2d, heatmap_summary.
+- `experiments/run_relative_permittivity_heatmap_simulation.py` -- full pipeline: phantom->H(f,x_az)->backprojection->heatmap; 5 figures.
+- `tests/test_dielectric_contrast_heatmap.py` -- 59 tests covering all modules.
+- `docs/phase5_relative_dielectric_contrast_heatmap.md` -- pipeline doc, results, limitations.
+- `thesis/addendum_phase5_relative_dielectric_contrast_heatmap.md` -- Spanish thesis addendum.
+- `reports/session_reports/2026-06-01_phase5_relative_dielectric_heatmap_software_sprint.md` -- session report.
+
+**Figures generated:** 5 figures in `reports/generated/phase5_dielectric_heatmap/`.
+
+**Simulation results:**
+- 5 OFDM blocks: 2.0-4.0 GHz, BW=2.375 GHz (simulation only, not bladeRF-achievable in one shot).
+- Range resolution: 6.3 cm. Azimuth resolution: ~5.0 cm.
+- Inclusion B localized at (0.25, 0.74) m vs true (0.25, 0.85) m -- error 0.11 m = 1.7 range bins.
+- Heatmap RMSE vs GT Fresnel map: 0.1093.
+- TX1/RX1 audit: PASS (41 files scanned, no TX2/RX2 violations).
+
+**Hardware:** NOT run. No RF transmitted. No motors.
+**No clinical claims.** No absolute permittivity. No cancer detection.
+
+**Next step:** `py experiments/run_phase4_hardware_entrypoint.py --run-supervised` with bladeRF + antennas + reflector.
+
+---
+
 ## Session 2026-06-01 (Phase 4 autonomous preparation)
 
 **Goal:** Phase 3 formal closure after OFDM pivot. Phase 4 autonomous software preparation.
