@@ -899,6 +899,166 @@ def run_tx1_rx1_audit() -> dict:
 
 
 # ===========================================================================
+# Background subtraction demo
+# ===========================================================================
+
+# Clutter target simulating background (e.g., metallic wall or table surface)
+_BG_CLUTTER_X_M   = 0.0    # centered on aperture
+_BG_CLUTTER_Z_M   = 1.80   # 1.8 m away -- beyond both inclusions
+_BG_CLUTTER_AMP   = 0.8    # strong metallic-like reflectivity
+
+
+def run_background_subtraction_demo(sim: dict) -> dict:
+    """
+    Simulate background subtraction: detect both inclusions through clutter removal.
+
+    Scenario:
+      - Background clutter: metallic point target at z=1.8 m (simulates wall/table).
+      - Background scene: clutter target only.
+      - Object scene:     clutter target + two dielectric inclusions.
+      - H_delta(f, x_az) = H_obj - H_bg (removes clutter, isolates inclusions).
+      - Backproject H_delta -> heatmap showing both inclusions.
+
+    This mirrors the real hardware protocol:
+      1. Capture without test object -> H_bg.
+      2. Place test object -> capture H_obj.
+      3. Compute H_delta = H_obj - H_bg.
+      4. Reconstruct heatmap from H_delta.
+    """
+    from simulation.ofdm_uwb_sar_simulator import PointTarget
+
+    phantom = sim["phantom"]
+    az_positions_m = sim["az_positions_m"]
+
+    # Background clutter target (metallic -- no Fresnel model needed, just strong amp)
+    clutter_target = PointTarget(
+        x_m=_BG_CLUTTER_X_M, z_m=_BG_CLUTTER_Z_M,
+        reflectivity=complex(_BG_CLUTTER_AMP),
+    )
+    targets_bg  = [clutter_target]
+    targets_obj = [clutter_target] + phantom.to_point_targets()
+
+    print("[BGSub] Simulating background scene (clutter only)...")
+    blocks_H_bg: list[np.ndarray] = []
+    blocks_f_bg: list[np.ndarray] = []
+    for i, fc in enumerate(BLOCK_CENTERS_HZ):
+        params = OFDMParameters(
+            n_fft=N_FFT, n_active=N_ACTIVE, cp_len=32,
+            sample_rate_hz=SAMPLE_RATE_HZ, center_freq_hz=fc,
+            dc_null=True, guard_bins=GUARD_BINS, pilot_seed=PILOT_SEED,
+        )
+        H_b, f_b, _ = simulate_h_matrix(
+            params, targets_bg, az_positions_m,
+            noise_std=NOISE_STD, seed=PILOT_SEED + i,
+        )
+        blocks_H_bg.append(H_b)
+        blocks_f_bg.append(f_b)
+    H_bg, f_bg = _stitch_h_matrices(blocks_H_bg, blocks_f_bg)
+
+    print("[BGSub] Simulating object scene (clutter + inclusions)...")
+    blocks_H_obj: list[np.ndarray] = []
+    blocks_f_obj: list[np.ndarray] = []
+    for i, fc in enumerate(BLOCK_CENTERS_HZ):
+        params = OFDMParameters(
+            n_fft=N_FFT, n_active=N_ACTIVE, cp_len=32,
+            sample_rate_hz=SAMPLE_RATE_HZ, center_freq_hz=fc,
+            dc_null=True, guard_bins=GUARD_BINS, pilot_seed=PILOT_SEED,
+        )
+        H_b, f_b, _ = simulate_h_matrix(
+            params, targets_obj, az_positions_m,
+            noise_std=NOISE_STD, seed=PILOT_SEED + i,
+        )
+        blocks_H_obj.append(H_b)
+        blocks_f_obj.append(f_b)
+    H_obj, f_obj = _stitch_h_matrices(blocks_H_obj, blocks_f_obj)
+
+    # Background subtraction
+    H_delta = H_obj - H_bg
+
+    print("[BGSub] Backprojecting H_delta...")
+    sar_delta = backprojection_image(
+        H_delta, f_obj, az_positions_m,
+        X_IMG, Z_IMG, padding_factor=8, window="hanning",
+    )
+    sar_obj_full = backprojection_image(
+        H_obj, f_obj, az_positions_m,
+        X_IMG, Z_IMG, padding_factor=8, window="hanning",
+    )
+
+    heatmap_delta    = sar_image_to_contrast_heatmap(sar_delta, normalize=True)
+    heatmap_obj_full = sar_image_to_contrast_heatmap(sar_obj_full, normalize=True)
+
+    summary_delta = heatmap_summary(heatmap_delta, X_IMG, Z_IMG, inclusions=phantom.inclusions)
+    print(f"  Peaks after BG subtraction (threshold 0.3): {summary_delta['n_peaks_found']}")
+    for pk in summary_delta["peaks"]:
+        print(f"    Peak at ({pk['x_m']:.2f}, {pk['z_m']:.2f}) m, contrast={pk['value']:.3f}")
+
+    return {
+        "H_bg": H_bg,
+        "H_obj": H_obj,
+        "H_delta": H_delta,
+        "freqs": f_obj,
+        "sar_delta": sar_delta,
+        "sar_obj_full": sar_obj_full,
+        "heatmap_delta": heatmap_delta,
+        "heatmap_obj_full": heatmap_obj_full,
+        "summary_delta": summary_delta,
+    }
+
+
+def fig6_background_subtraction(sim: dict, bgsub: dict) -> None:
+    """Figure 6: background_subtraction_comparison.png"""
+    phantom          = sim["phantom"]
+    x_img, z_img     = sim["x_img"], sim["z_img"]
+    heatmap_original = sim["heatmap"]     # H_obj only, no background
+    heatmap_obj_full = bgsub["heatmap_obj_full"]  # H_obj with clutter
+    heatmap_delta    = bgsub["heatmap_delta"]      # H_delta after subtraction
+    summary_delta    = bgsub["summary_delta"]
+
+    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+    fig.suptitle(
+        "Background Subtraction Demo -- H_delta = H_obj - H_bg\n"
+        "(Simulation. Relative contrast only. NOT absolute eps_r.)",
+        fontsize=11,
+    )
+
+    def _plot_heatmap(ax, hm, title, phantom, peaks=None, clutter_z=None):
+        im = ax.pcolormesh(z_img, x_img, hm, cmap=_CMAP_RECON, vmin=0, vmax=1, shading="auto")
+        plt.colorbar(im, ax=ax, label="Contrast [0,1]")
+        for incl in phantom.inclusions:
+            ax.plot(incl.z_m, incl.x_m, "w+", ms=11, mew=2,
+                    label=f"{incl.label} eps={incl.epsilon_r}")
+        if clutter_z is not None:
+            ax.axvline(clutter_z, color="yellow", linewidth=1.5, linestyle="--",
+                       label=f"Clutter at z={clutter_z}m")
+        if peaks:
+            for pk in peaks:
+                ax.plot(pk["z_m"], pk["x_m"], "r^", ms=8)
+        ax.set_title(title)
+        ax.set_xlabel("Down-range z [m]")
+        ax.set_ylabel("Cross-range x [m]")
+        ax.legend(fontsize=7, loc="upper right")
+        ax.set_xlim(z_img[0], z_img[-1])
+        ax.set_ylim(x_img[0], x_img[-1])
+
+    _plot_heatmap(axes[0], heatmap_obj_full,
+                  f"H_obj only (inclusions + clutter)\n[no BG subtraction]",
+                  phantom, clutter_z=_BG_CLUTTER_Z_M)
+    _plot_heatmap(axes[1], heatmap_original,
+                  "H_obj only (no clutter in sim)\n[Phase 5 base result]",
+                  phantom)
+    _plot_heatmap(axes[2], heatmap_delta,
+                  f"H_delta = H_obj - H_bg\n[both inclusions detectable]",
+                  phantom, peaks=summary_delta["peaks"])
+
+    plt.tight_layout()
+    out = OUT_DIR / "background_subtraction_comparison.png"
+    plt.savefig(out, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  [fig6] saved: {out.name}")
+
+
+# ===========================================================================
 # Main
 # ===========================================================================
 
@@ -927,16 +1087,22 @@ def main() -> None:
     fig4_range_profiles(sim)
     fig5_pipeline_summary(sim)
 
-    print("\n[4] Writing Markdown summaries...")
+    print("\n[4] Background subtraction demo...")
+    bgsub = run_background_subtraction_demo(sim)
+    fig6_background_subtraction(sim, bgsub)
+
+    print("\n[5] Writing Markdown summaries...")
     write_figure_explanations(sim)
     write_heatmap_summary_report(sim)
 
-    print("\n[5] Saving numpy arrays for downstream use...")
+    print("\n[6] Saving numpy arrays for downstream use...")
     np.save(OUT_DIR / "H_stitched.npy", sim["H_stitched"])
     np.save(OUT_DIR / "freqs_stitched.npy", sim["freqs_stitched"])
     np.save(OUT_DIR / "sar_image.npy", sim["sar_img"])
     np.save(OUT_DIR / "heatmap.npy", sim["heatmap"])
     np.save(OUT_DIR / "eps_map.npy", sim["eps_map"])
+    np.save(OUT_DIR / "H_delta.npy", bgsub["H_delta"])
+    np.save(OUT_DIR / "heatmap_delta.npy", bgsub["heatmap_delta"])
     print(f"  Arrays saved to {OUT_DIR.name}/")
 
     print("\n" + "=" * 60)

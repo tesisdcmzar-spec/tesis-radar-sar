@@ -2,6 +2,26 @@
 
 ---
 
+## Session 2026-06-01 (Phase 5 extension -- phase calibration + BG subtraction + 2D scan entrypoint)
+
+**Goal:** Extend Phase 5 with LO phase calibration, background subtraction demo, and 2D scan hardware entrypoint.
+
+**Tests:** 477/477 passed (+31 new for ofdm_block_phase_calibration).
+
+**New files:**
+- `processing/ofdm_block_phase_calibration.py` -- find_overlapping_bins, estimate_inter_block_phase_offset, calibrate_h_matrix_list, phase_calibration_summary.
+- `tests/test_ofdm_block_phase_calibration.py` -- 31 tests. Aligned frequency grids used to avoid false-negative overlap detection.
+- `experiments/run_phase5_2d_scan_hardware_entrypoint.py` -- manual azimuth scan with BG/OBJ capture, H_delta, backprojection. Modes: --prepare-only, --dry-run, --run-supervised.
+
+**Modified:**
+- `experiments/run_relative_permittivity_heatmap_simulation.py` -- added background subtraction demo (fig6): clutter target at z=1.8m, H_delta removes it, shows inclusions.
+
+**Hardware:** NOT run. No RF. No motors. TX1/RX1 audit: PASS (42 files, no violations).
+
+**Next step:** `py experiments/run_phase4_hardware_entrypoint.py --run-supervised` then `py experiments/run_phase5_2d_scan_hardware_entrypoint.py --run-supervised`.
+
+---
+
 ## Session 2026-06-01 (Phase 5 -- dielectric contrast heatmap software sprint)
 
 **Goal:** Implement 2D dielectric contrast heatmap pipeline using simulated UWB-OFDM-SAR.
