@@ -391,6 +391,13 @@ class TestNoHardwareImport:
         assert 'import_module("bladerf")' not in src
         assert 'import_module(\'bladerf\')' not in src
 
-    def test_no_bladerf_in_sys_modules(self):
+    def test_no_bladerf_added_by_rx_sfcw_postprocess_import(self):
+        # Check that importing rx_sfcw_postprocess itself does not add bladerf
+        # to sys.modules (delta check, robust to test-ordering side effects).
+        before = set(sys.modules.keys())
+        sys.modules.pop("processing.rx_sfcw_postprocess", None)
         import processing.rx_sfcw_postprocess  # noqa: F401
-        assert "bladerf" not in sys.modules
+        newly_added = set(sys.modules.keys()) - before
+        assert "bladerf" not in newly_added, (
+            "Importing rx_sfcw_postprocess must not load bladerf as a side effect"
+        )

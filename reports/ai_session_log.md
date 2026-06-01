@@ -510,3 +510,38 @@ noise. Range profile = noise IFFT. No target detection. No SAR imaging. No clini
 **Proximo paso A (hardware):** `py experiments/run_bladerf_tx_rx_reflector.py --run-sequence` -- experimento supervisado TX/RX con reflector metalico a ~1 m. Requiere presencia fisica del usuario y las frases "REFLECTOR SETUP READY" y "CONFIRM HARDWARE RUN".
 
 **Proximo paso B (offline):** Crear `processing/ofdm_channel.py` (CP removal, FFT, H[k]=Y[k]/X[k]) y `simulation/ofdm_uwb_sar_simulator.py` (generacion de simbolo OFDM, simulacion de canal, H(f, x_az) sintetico).
+
+---
+
+## Session 2026-06-01 -- Reorientacion UWB-OFDM-SAR
+
+**Goal:** Reorient the repository to the correct UWB-OFDM-SAR architecture. OFDM made the primary waveform. SFCW/RX-only reclassified as infrastructure validation.
+
+**Hardware actions:** None. No bladeRF. No RF. No TX. No motors.
+
+**Architecture override:**
+- OFDM is the primary probing waveform: H[k] = Y[k] / X[k].
+- Final data product: H(f, x_az) -> range profiles -> SAR backprojection.
+- SFCW/RX-only = infrastructure validation + practical block-stepping support.
+- No clinical claims.
+
+**New code modules:**
+- [`processing/ofdm_channel.py`](../processing/ofdm_channel.py) -- pilot generation, subcarrier allocation, CP, FFT, H[k] estimation, CIR, group delay, range estimation, synthetic channel.
+- [`simulation/ofdm_uwb_sar_simulator.py`](../simulation/ofdm_uwb_sar_simulator.py) -- OFDMParameters, PointTarget, simulate_h_matrix, range_profiles_from_h_matrix, backprojection_image.
+- [`experiments/run_ofdm_uwb_sar_simulation.py`](../experiments/run_ofdm_uwb_sar_simulation.py) -- demo offline, 2-target scene, peak at 0.2 cm from target.
+
+**New documentation:**
+- [`docs/architecture_uwb_ofdm_sar.md`](../docs/architecture_uwb_ofdm_sar.md) -- canonical architecture document.
+- [`docs/ofdm_bladerf_block_stitching_plan.md`](../docs/ofdm_bladerf_block_stitching_plan.md) -- 15 BW factors, block strategy.
+- [`docs/ofdm_dielectric_interpretation.md`](../docs/ofdm_dielectric_interpretation.md) -- Cole-Cole, safe/unsafe claims.
+- [`thesis/addendum_ofdm_uwb_sar_architecture.md`](../thesis/addendum_ofdm_uwb_sar_architecture.md) -- academic addendum.
+
+**Files updated:** CLAUDE.md (architecture override), README.md, thesis/README_thesis_structure.md.
+
+**Tests:** 281/281 passed (61 new OFDM tests + 220 prior). No regressions.
+
+**Full session report:** [reports/session_reports/2026-06-01_project_reorientation_uwb_ofdm_sar.md](session_reports/2026-06-01_project_reorientation_uwb_ofdm_sar.md)
+
+**Next step A (hardware):** `py experiments/run_bladerf_tx_rx_reflector.py --run-sequence` (user physically present, requires confirmation phrases).
+
+**Next step B (offline):** Create `acquisition/ofdm_block_capture.py` -- multi-block OFDM acquisition with fake backend tests.

@@ -1,5 +1,23 @@
 # CLAUDE.md - Radar SAR Thesis Project
 
+## PRIMARY ARCHITECTURE OVERRIDE
+
+The thesis architecture is UWB-OFDM-SAR.
+OFDM is the central probing waveform: H[k] = Y[k] / X[k] per subcarrier.
+SFCW/RX-only modules are infrastructure validation and practical frequency-block/stitching support, not the final architecture.
+The final acquisition product is H(f, x_az), estimated from known OFDM symbols over stitched RF blocks and azimuth positions.
+Do not design future work as pure SFCW unless explicitly requested.
+Do not treat TX/RX reflector SFCW as the main thesis goal.
+No clinical claims.
+
+See: `docs/architecture_uwb_ofdm_sar.md` (canonical architecture document).
+See: `docs/ofdm_bladerf_block_stitching_plan.md` (block stitching strategy).
+See: `docs/ofdm_dielectric_interpretation.md` (safe and unsafe claims).
+See: `docs/sources/ofdm_uwb_sar_fuentes_consolidadas.md` (source notes).
+See: `docs/ofdm_effective_bandwidth_bladerf.md` (BW analysis).
+
+---
+
 Project: undergraduate telecommunications thesis. Build an experimental microwave SAR radar platform using bladeRF, SFCW/OFDM sweeps, azimuth motion, DSP, and 2D image reconstruction for dielectric-contrast phantoms.
 
 Environment:
