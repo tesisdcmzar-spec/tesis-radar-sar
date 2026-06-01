@@ -1,0 +1,67 @@
+# Current Reading Order (Phase 4 Preparation)
+
+Last updated: 2026-06-01. Architecture: UWB-OFDM-SAR (primary).
+
+---
+
+## 1. Architecture (start here)
+
+- `docs/architecture_uwb_ofdm_sar.md`
+  Canonical system architecture. OFDM is the thesis waveform.
+  Defines H[k] = Y[k]/X[k] and the data cube H(f, x_az).
+
+## 2. Effective bandwidth analysis
+
+- `docs/ofdm_effective_bandwidth_bladerf.md`
+  Explains why a single bladeRF block has limited BW and why stitching is needed.
+
+## 3. Dielectric interpretation (what we can and cannot claim)
+
+- `docs/ofdm_dielectric_interpretation.md`
+  Safe vs. unsafe scientific claims. Required reading before writing thesis chapters.
+
+## 4. Block stitching strategy
+
+- `docs/ofdm_bladerf_block_stitching_plan.md`
+  How multiple RF blocks are merged into H_total(f).
+
+## 5. Phase 4 distance-contrast pipeline
+
+- `docs/phase4_ofdm_distance_contrast_profile.md`
+  H_delta[k], CIR_delta, relative contrast profile, range resolution,
+  why this is not epsilon_r, what calibration is required.
+
+## 6. Phase 3 closure (SFCW/RX-only reclassified)
+
+- `reports/session_reports/2026-06-01_phase3_closure_after_ofdm_pivot.md`
+  Why Phase 3 RX-only SFCW work is now infrastructure validation, not thesis core.
+
+## 7. Phase 4 autonomous preparation report
+
+- `reports/session_reports/2026-06-01_phase4_autonomous_ofdm_preparation.md`
+  What was done, what figures were generated, hardware readiness status.
+
+## 8. Hardware checklist (before any hardware run)
+
+- `docs/phase4_hardware_intervention_checklist.md`
+  Physical setup, exact command, expected outputs, scientific wording guide.
+
+## 9. Offline verification summary
+
+- `reports/generated/phase3_offline_verification_summary.md`
+  Tests, simulation, prepare-only, dry-run gate results.
+
+## 10. Source literature notes
+
+- `docs/sources/ofdm_uwb_sar_fuentes_consolidadas.md`
+  OFDM radar and UWB-SAR source annotations.
+
+---
+
+## Next hardware step
+
+```powershell
+py experiments/run_phase4_hardware_entrypoint.py --run-supervised
+```
+
+Requires: bladeRF connected, TX/RX antennas, metallic reflector at ~1 m.

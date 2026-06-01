@@ -2,6 +2,37 @@
 
 ---
 
+## Session 2026-06-01 (Phase 4 autonomous preparation)
+
+**Goal:** Phase 3 formal closure after OFDM pivot. Phase 4 autonomous software preparation.
+
+**Tests:** 387/387 passed (+40 new tests for ofdm_distance_contrast).
+
+**New files created:**
+- `processing/ofdm_distance_contrast.py` -- compute_delta_channel, channel_to_delay_profile, range_axis_m, relative_contrast_profile, find_strongest_contrast_peak, summarize_contrast_profile.
+- `tests/test_ofdm_distance_contrast.py` -- 40 tests, synthetic only, no hardware.
+- `experiments/run_bladerf_ofdm_phase4_validation.py` -- RX/TX smoke, single-block H[k].
+- `experiments/run_ofdm_background_object_profile.py` -- synthetic + hardware BG/OBJ contrast pipeline.
+- `experiments/run_ofdm_small_stitching_pilot.py` -- 3-block stitching pilot.
+- `experiments/run_phase4_autonomous_validation.py` -- all-safe orchestrator.
+- `experiments/run_phase4_hardware_entrypoint.py` -- supervised hardware entrypoint.
+- `docs/phase4_ofdm_distance_contrast_profile.md` -- pipeline documentation (Spanish).
+- `docs/phase4_hardware_intervention_checklist.md` -- physical setup checklist.
+- `thesis/reading_order_current.md` -- updated reading order.
+- `thesis/addendum_phase4_ofdm_relative_contrast_profile.md` -- thesis addendum.
+- Session reports: phase3_closure, phase4_autonomous_preparation, phase4_hardware_and_distance_profile.
+
+**Gates:** OFFLINE=PASS, SYNTHETIC_DISTANCE_PROFILE=PASS, STITCHING_DRYRUN=PASS, REPORT=PASS.
+**Hardware:** NOT run (no bladeRF connected). RX/TX gates SKIPPED.
+**No clinical claims.** No absolute permittivity. No motor scan. No SAR imaging.
+
+**Synthetic result:** Contrast peak at ~90 cm for synthetic reflector at 100 cm (500 MHz BW, dr=30 cm).
+**Stitching:** 3 blocks at 2.390/2.400/2.410 GHz stitched; H_total(f) PASS.
+
+**Next step:** `py experiments/run_phase4_hardware_entrypoint.py --run-supervised` with bladeRF + antennas + reflector at ~1 m.
+
+---
+
 ## Session 2026-06-01
 
 **Goal:** OFDM single-block acquisition layer after UWB-OFDM-SAR architecture pivot (f365e39).
