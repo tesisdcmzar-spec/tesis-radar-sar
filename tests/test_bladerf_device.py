@@ -27,12 +27,25 @@ from hardware.safety import (
     BLADERF_MAX_TX_GAIN_DB,
     BLADERF_MIN_FREQ_HZ,
     HardwareConfirmation,
+    ReflectorSetupConfirmation,
     SafetyError,
+    MAX_FIRST_TX_PILOT_DURATION_S,
+    MAX_REFLECTOR_TX_DURATION_PER_FREQ_S,
+    MIN_REFLECTOR_DISTANCE_M,
+    MAX_REFLECTOR_DISTANCE_M,
+    FIRST_TX_ALLOWED_ANTENNA_MODE,
     validate_bandwidth_hz,
     validate_frequency_hz,
     validate_gain_db,
     validate_n_samples,
     validate_sample_rate_hz,
+    validate_tx_duration_s,
+    validate_tx_gain_db,
+    validate_tx_antenna_mode,
+    validate_reflector_distance_m,
+    validate_no_subject_flags,
+    validate_no_motion_flags,
+    require_reflector_setup_ready,
 )
 from hardware.bladerf_device import BladeRFConfig, BladeRFDevice, _import_bladerf, sc16q11_to_complex
 
@@ -412,7 +425,10 @@ class _FakeBladeRFDevice:
         self._ch = _FakeChannel()
         self.sync_configured: bool = False
         self.rx_calls: int = 0
+        self.tx_calls: int = 0
+        self.tx_enabled: bool = False
         self.closed: bool = False
+        self.raise_on_sync_tx: bool = False
 
     def Channel(self, ch_id):
         return self._ch
@@ -424,8 +440,15 @@ class _FakeBladeRFDevice:
         buf[:n_samples * 4] = bytes(n_samples * 4)
         self.rx_calls += 1
 
+    def sync_tx(self, buf: bytearray, n_samples: int) -> None:
+        if self.raise_on_sync_tx:
+            raise RuntimeError("fake TX error")
+        self.tx_calls += 1
+
     def enable_module(self, ch_id, enable: bool) -> None:
-        pass
+        # Track TX enable state (channel IDs 1 == TX0 in fake)
+        if ch_id == 1:
+            self.tx_enabled = enable
 
     def close(self) -> None:
         self.closed = True
@@ -436,6 +459,7 @@ class _FakeBladeRFSubmodule:
 
     class ChannelLayout:
         RX_X1 = "RX_X1"
+        TX_X1 = "TX_X1"
 
     class Format:
         SC16_Q11 = "SC16_Q11"
@@ -456,6 +480,10 @@ class _FakeBladeRFModule:
     @staticmethod
     def CHANNEL_RX(n: int) -> int:
         return n
+
+    @staticmethod
+    def CHANNEL_TX(n: int) -> int:
+        return n + 1  # TX channels are odd in bladeRF API
 
 
 # ---------------------------------------------------------------------------
@@ -545,3 +573,252 @@ def test_real_mode_with_fake_backend_zero_buffer_gives_zero_iq(real_cfg, fake_mo
     dev.configure_rx()
     iq = dev.capture_rx()
     assert np.all(iq == 0 + 0j)
+
+
+# ---------------------------------------------------------------------------
+# Safety module — TX-specific validators
+# ---------------------------------------------------------------------------
+
+def test_reflector_setup_ready_phrase():
+    assert ReflectorSetupConfirmation.PHRASE == "REFLECTOR SETUP READY"
+
+
+def test_require_reflector_setup_ready_accepts_exact_phrase():
+    require_reflector_setup_ready("REFLECTOR SETUP READY")  # must not raise
+
+
+def test_require_reflector_setup_ready_rejects_wrong_phrase():
+    with pytest.raises(SafetyError, match="REFLECTOR SETUP READY"):
+        require_reflector_setup_ready("ok")
+
+
+def test_require_reflector_setup_ready_rejects_none():
+    with pytest.raises(SafetyError):
+        require_reflector_setup_ready(None)
+
+
+def test_validate_tx_duration_accepts_valid():
+    validate_tx_duration_s(0.01, MAX_REFLECTOR_TX_DURATION_PER_FREQ_S)  # 10 ms OK
+
+
+def test_validate_tx_duration_rejects_too_long():
+    with pytest.raises(SafetyError, match="exceeds allowed maximum"):
+        validate_tx_duration_s(1.0, MAX_REFLECTOR_TX_DURATION_PER_FREQ_S)
+
+
+def test_validate_tx_duration_rejects_zero():
+    with pytest.raises(SafetyError):
+        validate_tx_duration_s(0.0, MAX_REFLECTOR_TX_DURATION_PER_FREQ_S)
+
+
+def test_validate_tx_gain_accepts_limit():
+    validate_tx_gain_db(-20.0)  # at the limit, should pass
+
+
+def test_validate_tx_gain_rejects_above_limit():
+    with pytest.raises(SafetyError, match="safety limit"):
+        validate_tx_gain_db(0.0)
+
+
+def test_validate_tx_antenna_mode_accepts_correct():
+    validate_tx_antenna_mode(FIRST_TX_ALLOWED_ANTENNA_MODE)
+
+
+def test_validate_tx_antenna_mode_rejects_wrong():
+    with pytest.raises(SafetyError, match="not allowed"):
+        validate_tx_antenna_mode("free_space_random")
+
+
+def test_validate_reflector_distance_accepts_valid():
+    validate_reflector_distance_m(1.0)
+    validate_reflector_distance_m(MIN_REFLECTOR_DISTANCE_M)
+    validate_reflector_distance_m(MAX_REFLECTOR_DISTANCE_M)
+
+
+def test_validate_reflector_distance_rejects_too_close():
+    with pytest.raises(SafetyError, match="outside the allowed range"):
+        validate_reflector_distance_m(0.1)
+
+
+def test_validate_reflector_distance_rejects_too_far():
+    with pytest.raises(SafetyError, match="outside the allowed range"):
+        validate_reflector_distance_m(10.0)
+
+
+def test_validate_no_subject_flags_accepts_all_false():
+    validate_no_subject_flags(False, False, False)  # must not raise
+
+
+def test_validate_no_subject_flags_rejects_human():
+    with pytest.raises(SafetyError, match="human_subject"):
+        validate_no_subject_flags(True, False, False)
+
+
+def test_validate_no_subject_flags_rejects_phantom():
+    with pytest.raises(SafetyError, match="phantom"):
+        validate_no_subject_flags(False, True, False)
+
+
+def test_validate_no_subject_flags_rejects_biological():
+    with pytest.raises(SafetyError, match="biological_material"):
+        validate_no_subject_flags(False, False, True)
+
+
+def test_validate_no_motion_flags_accepts_all_false():
+    validate_no_motion_flags(False, False)  # must not raise
+
+
+def test_validate_no_motion_flags_rejects_motor_scan():
+    with pytest.raises(SafetyError, match="motor_scan"):
+        validate_no_motion_flags(True, False)
+
+
+def test_validate_no_motion_flags_rejects_sar_scan():
+    with pytest.raises(SafetyError, match="sar_scan"):
+        validate_no_motion_flags(False, True)
+
+
+# ---------------------------------------------------------------------------
+# transmit_cw_burst — dry-run safety tests
+# ---------------------------------------------------------------------------
+
+def test_transmit_cw_burst_dry_run_requires_configure_tx(dry_device):
+    with pytest.raises(RuntimeError, match="configure_tx"):
+        dry_device.transmit_cw_burst(duration_s=0.01)
+
+
+def test_transmit_cw_burst_dry_run_passes_safety_checks(dry_device):
+    dry_device.configure_tx()
+    meta = dry_device.transmit_cw_burst(
+        duration_s=0.01,
+        antenna_mode="antenna_reflector_test",
+        reflector_distance_m=1.0,
+    )
+    assert meta["dry_run"] is True
+    assert "NOT TRANSMITTED" in dry_device._log[-1]
+
+
+def test_transmit_cw_burst_dry_run_rejects_human_subject(dry_device):
+    dry_device.configure_tx()
+    with pytest.raises(SafetyError, match="human_subject"):
+        dry_device.transmit_cw_burst(duration_s=0.01, human_subject=True)
+
+
+def test_transmit_cw_burst_dry_run_rejects_phantom(dry_device):
+    dry_device.configure_tx()
+    with pytest.raises(SafetyError, match="phantom"):
+        dry_device.transmit_cw_burst(duration_s=0.01, phantom=True)
+
+
+def test_transmit_cw_burst_dry_run_rejects_biological_material(dry_device):
+    dry_device.configure_tx()
+    with pytest.raises(SafetyError, match="biological_material"):
+        dry_device.transmit_cw_burst(duration_s=0.01, biological_material=True)
+
+
+def test_transmit_cw_burst_dry_run_rejects_motor_scan(dry_device):
+    dry_device.configure_tx()
+    with pytest.raises(SafetyError, match="motor_scan"):
+        dry_device.transmit_cw_burst(duration_s=0.01, motor_scan=True)
+
+
+def test_transmit_cw_burst_dry_run_rejects_sar_scan(dry_device):
+    dry_device.configure_tx()
+    with pytest.raises(SafetyError, match="sar_scan"):
+        dry_device.transmit_cw_burst(duration_s=0.01, sar_scan=True)
+
+
+def test_transmit_cw_burst_dry_run_rejects_excessive_duration(dry_device):
+    dry_device.configure_tx()
+    with pytest.raises(SafetyError, match="exceeds allowed maximum"):
+        dry_device.transmit_cw_burst(duration_s=1.0)
+
+
+def test_transmit_cw_burst_dry_run_rejects_bad_antenna_mode(dry_device):
+    dry_device.configure_tx()
+    with pytest.raises(SafetyError, match="not allowed"):
+        dry_device.transmit_cw_burst(duration_s=0.01, antenna_mode="wrong_mode")
+
+
+def test_transmit_cw_burst_dry_run_rejects_reflector_too_close(dry_device):
+    dry_device.configure_tx()
+    with pytest.raises(SafetyError, match="outside the allowed range"):
+        dry_device.transmit_cw_burst(duration_s=0.01, reflector_distance_m=0.1)
+
+
+def test_transmit_cw_burst_dry_run_rejects_reflector_too_far(dry_device):
+    dry_device.configure_tx()
+    with pytest.raises(SafetyError, match="outside the allowed range"):
+        dry_device.transmit_cw_burst(duration_s=0.01, reflector_distance_m=99.0)
+
+
+def test_status_includes_tx_enabled(dry_device):
+    st = dry_device.status()
+    assert "tx_enabled" in st
+    assert st["tx_enabled"] is False
+
+
+# ---------------------------------------------------------------------------
+# transmit_cw_burst — real-mode path with fake backend
+# ---------------------------------------------------------------------------
+
+def test_real_tx_requires_reflector_setup_ready(real_cfg, fake_mod):
+    dev = BladeRFDevice(real_cfg, confirmation="CONFIRM HARDWARE RUN",
+                        _bladerf_module=fake_mod)
+    dev.configure_tx()
+    with pytest.raises(SafetyError, match="REFLECTOR SETUP READY"):
+        dev.transmit_cw_burst(
+            duration_s=0.01,
+            reflector_setup_ready=None,
+        )
+
+
+def test_real_tx_with_correct_confirmations_calls_sync_tx(real_cfg, fake_mod):
+    dev = BladeRFDevice(real_cfg, confirmation="CONFIRM HARDWARE RUN",
+                        _bladerf_module=fake_mod)
+    dev.configure_tx()
+    dev.transmit_cw_burst(
+        duration_s=0.01,
+        reflector_setup_ready="REFLECTOR SETUP READY",
+        antenna_mode="antenna_reflector_test",
+        reflector_distance_m=1.0,
+    )
+    assert fake_mod._last_device.tx_calls == 1
+
+
+def test_real_tx_disables_module_after_burst(real_cfg, fake_mod):
+    dev = BladeRFDevice(real_cfg, confirmation="CONFIRM HARDWARE RUN",
+                        _bladerf_module=fake_mod)
+    dev.configure_tx()
+    dev.transmit_cw_burst(
+        duration_s=0.01,
+        reflector_setup_ready="REFLECTOR SETUP READY",
+        antenna_mode="antenna_reflector_test",
+        reflector_distance_m=1.0,
+    )
+    # TX module must be disabled after the burst
+    assert fake_mod._last_device.tx_enabled is False
+    assert "TX DISABLED" in dev._log[-1]
+
+
+def test_real_tx_disables_module_even_if_sync_tx_raises(real_cfg, fake_mod):
+    dev = BladeRFDevice(real_cfg, confirmation="CONFIRM HARDWARE RUN",
+                        _bladerf_module=fake_mod)
+    fake_mod._last_device.raise_on_sync_tx = True
+    dev.configure_tx()
+    with pytest.raises(RuntimeError, match="fake TX error"):
+        dev.transmit_cw_burst(
+            duration_s=0.01,
+            reflector_setup_ready="REFLECTOR SETUP READY",
+            antenna_mode="antenna_reflector_test",
+            reflector_distance_m=1.0,
+        )
+    assert "TX DISABLED" in dev._log[-1]
+
+
+def test_no_bladerf_import_in_bladerf_device_module_still_passes():
+    """Re-confirm no top-level bladerf import after TX additions."""
+    mod = sys.modules.get("hardware.bladerf_device") or \
+          importlib.import_module("hardware.bladerf_device")
+    src = Path(mod.__file__).read_text(encoding="utf-8")
+    assert not re.search(r"^\s*(import|from)\s+bladerf", src, re.MULTILINE)

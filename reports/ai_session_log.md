@@ -452,3 +452,43 @@ noise. Range profile = noise IFFT. No target detection. No SAR imaging. No clini
    < 1 second, user present, explicit confirmation.
 3. If load test passes: first TX with antenna toward metallic reflector at known distance.
 4. See `docs/prompts/next_phase_tx_safety_plan.md` for complete ordered plan.
+
+---
+
+## Session 2026-05-31 -- OFDM pivot source notes + TX infrastructure
+
+**Goal:** Mirror Notion OFDM/UWB/SAR source notes into repo-local Markdown; build supervised TX/RX reflector experiment infrastructure.
+
+**Hardware actions:** None. No RF. No TX. No bladeRF. No motors.
+
+**Files created:**
+- [`docs/sources/ofdm_uwb_sar_fuentes_consolidadas.md`](../docs/sources/ofdm_uwb_sar_fuentes_consolidadas.md) -- Canonical repo-local mirror of Notion "OFDM UWB SAR -- lectura consolidada de fuentes". Establishes UWB-OFDM-SAR as the primary architecture: OFDM is the sounding waveform, H[k]=Y[k]/X[k] is the channel estimate, SFCW/RX-only is reclassified as infrastructure validation, H(f,x_az) is the final data product for SAR backprojection.
+- [`docs/ofdm_effective_bandwidth_bladerf.md`](../docs/ofdm_effective_bandwidth_bladerf.md) -- Canonical repo-local mirror of Notion "OFDM -- analisis de ancho de banda efectivo con bladeRF". Documents 15 factors that reduce effective BW (analog/digital filters, guard subcarriers, DC null, CP sizing, PAPR, ADC quantization, sync error, CFO/SFO, ICI, inter-block phase jumps, stitching, external interference, antenna response). Recommends conservative start: Fs=20-40 MS/s, N_fft=256-1024, central subcarriers only.
+- [`hardware/safety.py`](../hardware/safety.py) (modified) -- Added TX safety constants and validators: `validate_tx_duration_s`, `validate_tx_gain_db`, `validate_tx_antenna_mode`, `validate_reflector_distance_m`, `validate_no_subject_flags`, `validate_no_motion_flags`, `require_reflector_setup_ready`.
+- [`hardware/bladerf_device.py`](../hardware/bladerf_device.py) (modified) -- Implemented real TX path: `configure_tx()`, `enable_tx()`, `transmit_cw_burst()` with always-disable finally block, `_transmit_cw_burst_real()` via sync_tx.
+- [`tests/test_bladerf_device.py`](../tests/test_bladerf_device.py) (modified) -- Added 38 new TX safety and real-mode tests (subject flags, motion flags, duration, gain, antenna mode, reflector distance, fake-backend TX, finally-block disable).
+- [`configs/tx_rx_reflector_1m.yaml`](../configs/tx_rx_reflector_1m.yaml) -- Reflector experiment config: 2.3-2.5 GHz, 20 MHz step, 11 points, 20 ms TX/freq, -20 dB TX gain.
+- [`docs/reflector_experiment_setup.md`](../docs/reflector_experiment_setup.md) -- Physical setup guide in Spanish.
+- [`experiments/run_bladerf_tx_rx_reflector.py`](../experiments/run_bladerf_tx_rx_reflector.py) -- Supervised TX/RX reflector script: --prepare-only, --pilot, --background, --reflector, --analyze, --run-sequence. Requires "REFLECTOR SETUP READY" + "CONFIRM HARDWARE RUN" before any real TX.
+
+**Architecture decision:** Project is officially UWB-OFDM-SAR. SFCW/RX-only is infrastructure. OFDM is the primary waveform. Notion pages are mirrors only; repo files are canonical.
+
+**Test results:** 220/220 passed (38 new TX tests + 182 prior). No regressions.
+
+**Next step:** Run supervised TX/RX reflector experiment (user physically present, confirmation required). Then reorient repo to full UWB-OFDM-SAR architecture: `processing/ofdm_channel.py`, `simulation/ofdm_uwb_sar_simulator.py`.
+
+---
+
+## Session 2026-05-31 -- CIERRE (commit 61027df, sin actividad nueva)
+
+**Tipo:** Cierre de sesion -- reanudacion de contexto solamente.
+
+**Resumen:** La sesion de trabajo tecnico de post-procesamiento SFCW habia sido completada y commiteada (`61027df`) antes de este bloque de contexto. En esta instancia solo se resumio el estado del repositorio, se confirmo que el working tree estaba limpio (182/182 tests pasando), y se ejecuto el skill `radar-session-close`. No se creo ni modifico codigo fuente. No se accedio a hardware.
+
+**Hardware:** Ninguna accion de hardware.
+
+**Tests:** 182/182 pasando (sin cambios desde `61027df`).
+
+**Informe de cierre:** [reports/session_reports/2026-05-31_cierre_sesion_postproceso_sfcw.md](session_reports/2026-05-31_cierre_sesion_postproceso_sfcw.md)
+
+**Proximo paso:** Implementar `configure_tx()` y `enable_tx()` en `hardware/bladerf_device.py` con bloqueos de seguridad, y crear `experiments/run_bladerf_tx_load_test.py`. Ver plan completo en `docs/prompts/next_phase_tx_safety_plan.md`.

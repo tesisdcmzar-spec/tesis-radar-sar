@@ -16,8 +16,9 @@ Design principles
    when dry_run=False AND confirmation has been validated.  This ensures tests
    and offline scripts never trigger USB access by accident.
 
-4. transmit_tone() always raises SafetyError when dry_run=False (TX not yet
-   implemented).  In dry-run mode it simulates logging without emitting RF.
+4. transmit_cw_burst() implements a short CW burst for the antenna reflector
+   experiment.  In real mode it requires additional safety flags; TX is always
+   disabled in a finally block even if an exception is raised.
 
 5. sc16q11_to_complex() is a standalone helper that converts the bladeRF
    SC16_Q11 wire format (interleaved int16) to complex128.  It is
@@ -25,12 +26,15 @@ Design principles
 
 Current status
 --------------
-The real RX capture path (configure_rx + capture_rx via _capture_rx_real) is
-implemented using the libbladeRF Python bindings API structure.  It has NOT
-been executed on real hardware.  First real hardware execution requires:
-  - User presence
-  - bladeRF device physically connected
-  - Exact confirmation string: 'CONFIRM HARDWARE RUN' passed at construction
+The real RX capture path is implemented and tested with a fake backend.
+The real TX path (configure_tx, enable_tx, transmit_cw_burst) is implemented
+for the first antenna reflector experiment.  All TX operations require:
+  - dry_run=False
+  - confirmation='CONFIRM HARDWARE RUN'
+  - reflector_setup_ready='REFLECTOR SETUP READY'
+  - antenna_mode='antenna_reflector_test'
+  - human_subject=False, phantom=False, biological_material=False
+  - motor_scan=False, sar_scan=False
 """
 from __future__ import annotations
 
@@ -41,13 +45,24 @@ import numpy as np
 
 from hardware.safety import (
     HardwareConfirmation,
+    ReflectorSetupConfirmation,
     SafetyError,
     require_hardware_confirmation,
+    require_reflector_setup_ready,
     validate_bandwidth_hz,
     validate_frequency_hz,
     validate_gain_db,
     validate_n_samples,
+    validate_no_motion_flags,
+    validate_no_subject_flags,
+    validate_reflector_distance_m,
     validate_sample_rate_hz,
+    validate_tx_antenna_mode,
+    validate_tx_duration_s,
+    validate_tx_gain_db,
+    MAX_REFLECTOR_TX_DURATION_PER_FREQ_S,
+    MAX_FIRST_TX_PILOT_DURATION_S,
+    REFLECTOR_TX_GAIN_DB,
 )
 
 
@@ -199,6 +214,7 @@ class BladeRFDevice:
         self._config = config
         self._configured_rx: bool = False
         self._configured_tx: bool = False
+        self._tx_enabled: bool = False
         self._closed: bool = False
         self._log: list[str] = []
         self._bladerf_mod = None
@@ -267,25 +283,171 @@ class BladeRFDevice:
         """
         Apply TX configuration to the device.
 
-        In dry-run mode: logs the action without enabling TX.
-        In real mode: not yet implemented.
-
-        Note: TX is not enabled even in dry-run; this method only stores the
-        configuration for later inspection via status().
+        In dry-run mode: validates parameters and logs the action without enabling TX.
+        In real mode: sets frequency, sample rate, bandwidth, and gain on TX channel 0.
+        TX module is NOT enabled by this method; call enable_tx(True) separately.
         """
         self._assert_open()
         if not self._config.dry_run:
-            raise NotImplementedError(
-                "Real TX configuration is not yet implemented.  "
-                "TX must be gated by explicit CONFIRM HARDWARE RUN and a verified "
-                "antenna or RF load connection before this method is safe to call."
+            tx_ch = self._bladerf_mod.CHANNEL_TX(0)
+            ch = self._device.Channel(tx_ch)
+            ch.frequency = int(self._config.center_freq_hz)
+            ch.sample_rate = int(self._config.sample_rate_hz)
+            ch.bandwidth = int(self._config.bandwidth_hz)
+            ch.gain = int(self._config.tx_gain_db)
+            self._log.append(
+                f"configure_tx: "
+                f"f={self._config.center_freq_hz/1e6:.1f} MHz, "
+                f"fs={self._config.sample_rate_hz/1e6:.1f} MS/s, "
+                f"bw={self._config.bandwidth_hz/1e6:.1f} MHz, "
+                f"gain={self._config.tx_gain_db:.1f} dB  [module NOT yet enabled]"
             )
-        self._log.append(
-            f"[DRY-RUN] configure_tx: "
-            f"f={self._config.center_freq_hz/1e6:.1f} MHz, "
-            f"gain={self._config.tx_gain_db:.1f} dB  (TX not enabled)"
-        )
+        else:
+            self._log.append(
+                f"[DRY-RUN] configure_tx: "
+                f"f={self._config.center_freq_hz/1e6:.1f} MHz, "
+                f"gain={self._config.tx_gain_db:.1f} dB  (TX not enabled)"
+            )
         self._configured_tx = True
+
+    def enable_tx(self, enable: bool) -> None:
+        """
+        Enable or disable the TX module.
+
+        In dry-run mode: logs the action only.
+        In real mode: calls enable_module on CHANNEL_TX(0).
+        """
+        self._assert_open()
+        if not self._config.dry_run:
+            tx_ch = self._bladerf_mod.CHANNEL_TX(0)
+            self._device.enable_module(tx_ch, enable)
+        self._log.append(
+            f"{'[DRY-RUN] ' if self._config.dry_run else ''}enable_tx: {enable}"
+        )
+        self._tx_enabled = enable
+
+    def transmit_cw_burst(
+        self,
+        duration_s: float,
+        reflector_setup_ready: str | None = None,
+        antenna_mode: str = "antenna_reflector_test",
+        reflector_distance_m: float = 1.0,
+        human_subject: bool = False,
+        phantom: bool = False,
+        biological_material: bool = False,
+        motor_scan: bool = False,
+        sar_scan: bool = False,
+    ) -> dict:
+        """
+        Transmit a CW burst at the configured center frequency.
+
+        In dry-run mode: all safety checks pass and the call is logged;
+        no RF is emitted.
+
+        In real mode: validates every safety condition, configures TX sync
+        interface, transmits a buffer of SC16_Q11 samples for duration_s,
+        then disables TX in a finally block regardless of exceptions.
+
+        Parameters
+        ----------
+        duration_s : float
+            Burst duration [s].  Must be <= MAX_REFLECTOR_TX_DURATION_PER_FREQ_S.
+        reflector_setup_ready : str
+            Must equal 'REFLECTOR SETUP READY' for real TX.
+        antenna_mode : str
+            Must equal 'antenna_reflector_test'.
+        reflector_distance_m : float
+            Measured reflector distance [m].  Must be in [0.5, 3.0].
+        human_subject, phantom, biological_material, motor_scan, sar_scan : bool
+            All must be False.
+
+        Returns
+        -------
+        dict
+            Metadata about the transmission (freq_hz, gain_db, duration_s,
+            dry_run, n_samples_tx).
+
+        Raises
+        ------
+        SafetyError
+            If any safety condition fails.
+        RuntimeError
+            If configure_tx() was not called first, or device is closed.
+        """
+        self._assert_open()
+        if not self._configured_tx:
+            raise RuntimeError("configure_tx() must be called before transmit_cw_burst().")
+
+        # --- safety validation (runs in both real and dry-run mode) ---
+        validate_tx_duration_s(duration_s, MAX_REFLECTOR_TX_DURATION_PER_FREQ_S)
+        validate_tx_gain_db(self._config.tx_gain_db)
+        validate_tx_antenna_mode(antenna_mode)
+        validate_reflector_distance_m(reflector_distance_m)
+        validate_no_subject_flags(human_subject, phantom, biological_material)
+        validate_no_motion_flags(motor_scan, sar_scan)
+
+        n_tx = int(self._config.sample_rate_hz * duration_s)
+        meta = {
+            "freq_hz":            self._config.center_freq_hz,
+            "tx_gain_db":         self._config.tx_gain_db,
+            "duration_s":         duration_s,
+            "n_samples_tx":       n_tx,
+            "dry_run":            self._config.dry_run,
+            "antenna_mode":       antenna_mode,
+            "reflector_distance_m": reflector_distance_m,
+        }
+
+        if not self._config.dry_run:
+            # Extra confirmations required only for real hardware
+            require_reflector_setup_ready(reflector_setup_ready)
+            self._transmit_cw_burst_real(n_tx, duration_s)
+        else:
+            self._log.append(
+                f"[DRY-RUN] transmit_cw_burst: "
+                f"f={self._config.center_freq_hz/1e6:.1f} MHz, "
+                f"gain={self._config.tx_gain_db:.1f} dB, "
+                f"dur={duration_s*1e3:.1f} ms, n_tx={n_tx}  "
+                f"(NOT TRANSMITTED)"
+            )
+        return meta
+
+    def _transmit_cw_burst_real(self, n_tx: int, duration_s: float) -> None:
+        """
+        Real TX burst via libbladeRF sync interface.
+
+        Builds a unit-amplitude CW buffer, enables TX module, calls sync_tx,
+        then disables TX in a finally block.
+        """
+        _api = self._bladerf_mod._bladerf
+        self._device.sync_config(
+            layout=_api.ChannelLayout.TX_X1,
+            fmt=_api.Format.SC16_Q11,
+            num_buffers=16,
+            buffer_size=8192,
+            num_transfers=8,
+            stream_timeout=3500,
+        )
+        # Full-scale CW at DC relative to center: I=2047, Q=0 for all samples
+        amplitude_q11 = 512  # ~25% of full scale -> conservative TX power
+        tx_i = np.full(n_tx, amplitude_q11, dtype=np.int16)
+        tx_q = np.zeros(n_tx, dtype=np.int16)
+        buf_arr = np.empty(n_tx * 2, dtype=np.int16)
+        buf_arr[0::2] = tx_i
+        buf_arr[1::2] = tx_q
+        buf = bytearray(buf_arr.tobytes())
+
+        tx_ch = self._bladerf_mod.CHANNEL_TX(0)
+        self._device.enable_module(tx_ch, True)
+        self._log.append(
+            f"TX ENABLED: f={self._config.center_freq_hz/1e6:.1f} MHz, "
+            f"n_tx={n_tx}, dur={duration_s*1e3:.1f} ms"
+        )
+        try:
+            self._device.sync_tx(buf, n_tx)
+            self._log.append("TX burst complete.")
+        finally:
+            self._device.enable_module(tx_ch, False)
+            self._log.append("TX DISABLED.")
 
     # -----------------------------------------------------------------------
     # Capture
@@ -419,7 +581,10 @@ class BladeRFDevice:
         """Release the device and mark it closed."""
         if not self._closed:
             if not self._config.dry_run and self._device is not None:
-                # Disable RX module before closing to avoid libusb warnings.
+                try:
+                    self._device.enable_module(self._bladerf_mod.CHANNEL_TX(0), False)
+                except Exception:
+                    pass
                 try:
                     self._device.enable_module(self._bladerf_mod.CHANNEL_RX(0), False)
                 except Exception:
@@ -444,6 +609,7 @@ class BladeRFDevice:
             "channel": self._config.channel,
             "configured_rx": self._configured_rx,
             "configured_tx": self._configured_tx,
+            "tx_enabled": self._tx_enabled,
             "closed": self._closed,
             "log_entries": len(self._log),
         }

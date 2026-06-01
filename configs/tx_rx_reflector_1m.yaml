@@ -1,0 +1,45 @@
+# TX/RX metallic reflector experiment — first antenna-based TX validation
+# Experiment type: single metallic reflector at ~1 m, no phantom, no SAR.
+
+experiment_type: tx_rx_metal_reflector_1m
+
+# ----- Safety flags -----
+tx_antenna_mode: antenna_reflector_test
+reflector_distance_m: 1.0
+human_subject: false
+phantom: false
+biological_material: false
+motor_scan: false
+sar_scan: false
+require_user_present: true
+require_confirmation: true
+require_reflector_setup_ready: true
+
+# ----- Pilot (single-frequency, very short TX/RX test) -----
+pilot:
+  center_freq_hz: 2400000000.0    # 2.400 GHz (ISM band)
+  tx_duration_s: 0.02             # 20 ms
+  rx_duration_s: 0.02
+  sample_rate_hz: 1000000.0       # 1 MS/s
+  bandwidth_hz: 1000000.0         # 1 MHz
+  tx_gain_db: -20.0               # minimum conservative
+  rx_gain_db: 20.0
+  n_samples: 20000                # 20 ms at 1 MS/s
+
+# ----- Coarse SFCW sweep -----
+sfcw:
+  f_start_hz: 2300000000.0        # 2.300 GHz
+  f_stop_hz:  2500000000.0        # 2.500 GHz
+  step_hz:    20000000.0          # 20 MHz step → 11 points
+  n_points_expected: 11
+  tx_duration_per_freq_s: 0.02    # 20 ms per frequency step
+  rx_duration_per_freq_s: 0.02
+  sample_rate_hz: 1000000.0       # 1 MS/s
+  bandwidth_hz: 1000000.0         # 1 MHz
+  tx_gain_db: -20.0
+  rx_gain_db: 20.0
+  n_samples: 20000                # 20 ms at 1 MS/s
+
+# ----- Expected results -----
+expected_peak_range_m: 1.0
+peak_tolerance_m: 0.5             # peak within +-0.5 m considered a hit
