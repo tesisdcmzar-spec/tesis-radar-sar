@@ -492,3 +492,21 @@ noise. Range profile = noise IFFT. No target detection. No SAR imaging. No clini
 **Informe de cierre:** [reports/session_reports/2026-05-31_cierre_sesion_postproceso_sfcw.md](session_reports/2026-05-31_cierre_sesion_postproceso_sfcw.md)
 
 **Proximo paso:** Implementar `configure_tx()` y `enable_tx()` en `hardware/bladerf_device.py` con bloqueos de seguridad, y crear `experiments/run_bladerf_tx_load_test.py`. Ver plan completo en `docs/prompts/next_phase_tx_safety_plan.md`.
+
+---
+
+## Session 2026-05-31 -- CIERRE (post-compactacion, sin actividad nueva)
+
+**Tipo:** Cierre de sesion -- reanudacion tras compactacion de contexto.
+
+**Resumen:** El trabajo tecnico de la sesion anterior (infraestructura TX + notas fuente OFDM) ya estaba commiteado y pusheado como `d4b9814` antes de que se iniciara este bloque de contexto. En esta instancia el usuario ejecuto `/compact` y luego el skill `radar-session-close`. No se creo ni modifico codigo fuente. No se accedio a hardware.
+
+**Hardware:** Ninguna accion de hardware.
+
+**Tests:** 220/220 pasando (sin cambios desde `d4b9814`).
+
+**Informe detallado:** [reports/session_reports/2026-05-31_infraestructura_tx_y_pivot_ofdm.md](session_reports/2026-05-31_infraestructura_tx_y_pivot_ofdm.md)
+
+**Proximo paso A (hardware):** `py experiments/run_bladerf_tx_rx_reflector.py --run-sequence` -- experimento supervisado TX/RX con reflector metalico a ~1 m. Requiere presencia fisica del usuario y las frases "REFLECTOR SETUP READY" y "CONFIRM HARDWARE RUN".
+
+**Proximo paso B (offline):** Crear `processing/ofdm_channel.py` (CP removal, FFT, H[k]=Y[k]/X[k]) y `simulation/ofdm_uwb_sar_simulator.py` (generacion de simbolo OFDM, simulacion de canal, H(f, x_az) sintetico).
