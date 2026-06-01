@@ -1,0 +1,61 @@
+# OFDM single-block channel estimation config -- 2.4 GHz first test
+# Conservative values for first real OFDM block experiment.
+# Architecture: UWB-OFDM-SAR (single block is the foundation layer).
+# Goal: estimate H[k] from one OFDM symbol burst, not full SAR imaging.
+
+# RF center frequency for this block
+center_freq_hz: 2400000000.0   # 2.4 GHz
+
+# ADC/DAC sample rate (bladeRF 2.0 micro supports up to ~61.44 MS/s)
+sample_rate_hz: 2000000.0      # 2 MS/s -- conservative for first test
+
+# Analog low-pass filter bandwidth (should be <= sample_rate_hz)
+bandwidth_hz: 2000000.0        # 2 MHz
+
+# OFDM DFT size
+n_fft: 256
+
+# Active subcarriers in central band (before guard removal)
+n_active: 160
+
+# Cyclic prefix length [samples]
+cp_len: 64
+
+# Guard bins removed from each edge of active region (avoids filter roll-off)
+guard_bins: 20
+
+# Null DC bin (subcarrier 0) to avoid LO leakage
+dc_null: true
+
+# Pilot modulation type ('bpsk' or 'qpsk')
+pilot_type: bpsk
+
+# Pilot RNG seed for reproducibility
+pilot_seed: 42
+
+# Number of OFDM symbols to average for H[k] estimation
+# (more = better SNR; short for first test)
+repetitions: 8
+
+# TX gain [dB] -- conservative safety limit
+# bladeRF 2.0 micro: range ~-23.5 to +66 dB; capped at -20 dB here
+tx_gain_db: -20.0
+
+# RX gain [dB]
+rx_gain_db: 20.0
+
+# Safety flags -- all must be False for this experiment
+human_subject: false
+phantom: false
+biological_material: false
+motor_scan: false
+sar_scan: false
+
+# Notes
+# -----
+# Subcarrier spacing: sample_rate_hz / n_fft = 7812.5 Hz
+# Active bandwidth: ~(n_active - 2*guard_bins) * df = 937.5 kHz
+# Symbol duration: n_fft / sample_rate_hz = 128 us
+# CP duration: cp_len / sample_rate_hz = 32 us
+# Frame duration: repetitions * (cp_len + n_fft) / sample_rate_hz = 1.28 ms
+# This is well within MAX_OFDM_IQ_BURST_DURATION_S = 10 ms

@@ -28,7 +28,9 @@ Current status
 --------------
 The real RX capture path is implemented and tested with a fake backend.
 The real TX path (configure_tx, enable_tx, transmit_cw_burst) is implemented
-for the first antenna reflector experiment.  All TX operations require:
+for the first antenna reflector experiment.  transmit_iq_burst() adds support
+for arbitrary IQ waveforms (OFDM), required for UWB-OFDM-SAR.
+All TX operations require:
   - dry_run=False
   - confirmation='CONFIRM HARDWARE RUN'
   - reflector_setup_ready='REFLECTOR SETUP READY'
@@ -62,6 +64,7 @@ from hardware.safety import (
     validate_tx_gain_db,
     MAX_REFLECTOR_TX_DURATION_PER_FREQ_S,
     MAX_FIRST_TX_PILOT_DURATION_S,
+    MAX_OFDM_IQ_BURST_DURATION_S,
     REFLECTOR_TX_GAIN_DB,
 )
 
@@ -536,6 +539,136 @@ class BladeRFDevice:
     # -----------------------------------------------------------------------
     # Transmission
     # -----------------------------------------------------------------------
+
+    def transmit_iq_burst(
+        self,
+        iq_samples: np.ndarray,
+        reflector_setup_ready: str | None = None,
+        human_subject: bool = False,
+        phantom: bool = False,
+        biological_material: bool = False,
+        motor_scan: bool = False,
+        sar_scan: bool = False,
+    ) -> dict:
+        """
+        Transmit an arbitrary IQ sample buffer as a single burst.
+
+        This method enables transmission of any waveform (including OFDM) by
+        writing complex IQ samples directly to the bladeRF TX stream.
+
+        In dry-run mode: safety checks pass, the call is logged, and a metadata
+        dict is returned.  No RF is emitted and no hardware is accessed.
+
+        In real mode: validates every safety condition, writes the IQ buffer as
+        SC16_Q11 samples to the sync TX interface, then disables TX in a finally
+        block regardless of exceptions.
+
+        OFDM TX note
+        ------------
+        The bladeRF supports arbitrary waveform TX via its sync interface.
+        IQ samples should be normalized to approximately [-1, 1] before passing
+        to this method; they are scaled to SC16_Q11 range internally.
+        Duration is computed from len(iq_samples) / sample_rate_hz, which must
+        not exceed MAX_OFDM_IQ_BURST_DURATION_S for safety.
+
+        Parameters
+        ----------
+        iq_samples : complex array
+            Baseband IQ samples to transmit.  Length determines burst duration.
+        reflector_setup_ready : str
+            Must equal 'REFLECTOR SETUP READY' for real TX.
+        human_subject, phantom, biological_material, motor_scan, sar_scan : bool
+            All must be False.
+
+        Returns
+        -------
+        dict
+            Metadata about the transmission (freq_hz, gain_db, n_samples,
+            duration_s, dry_run, sample_rate_hz).
+
+        Raises
+        ------
+        SafetyError
+            If any safety condition fails.
+        RuntimeError
+            If configure_tx() was not called first, or device is closed.
+        """
+        self._assert_open()
+        if not self._configured_tx:
+            raise RuntimeError("configure_tx() must be called before transmit_iq_burst().")
+
+        n_tx = len(iq_samples)
+        duration_s = n_tx / self._config.sample_rate_hz
+
+        validate_tx_duration_s(duration_s, MAX_OFDM_IQ_BURST_DURATION_S)
+        validate_tx_gain_db(self._config.tx_gain_db)
+        validate_no_subject_flags(human_subject, phantom, biological_material)
+        validate_no_motion_flags(motor_scan, sar_scan)
+
+        meta = {
+            "freq_hz":        self._config.center_freq_hz,
+            "tx_gain_db":     self._config.tx_gain_db,
+            "n_samples_tx":   n_tx,
+            "duration_s":     duration_s,
+            "sample_rate_hz": self._config.sample_rate_hz,
+            "dry_run":        self._config.dry_run,
+        }
+
+        if not self._config.dry_run:
+            require_reflector_setup_ready(reflector_setup_ready)
+            self._transmit_iq_burst_real(iq_samples, n_tx, duration_s)
+        else:
+            self._log.append(
+                f"[DRY-RUN] transmit_iq_burst: "
+                f"f={self._config.center_freq_hz/1e6:.1f} MHz, "
+                f"gain={self._config.tx_gain_db:.1f} dB, "
+                f"n_tx={n_tx}, dur={duration_s*1e3:.2f} ms  "
+                f"(NOT TRANSMITTED)"
+            )
+        return meta
+
+    def _transmit_iq_burst_real(
+        self,
+        iq_samples: np.ndarray,
+        n_tx: int,
+        duration_s: float,
+    ) -> None:
+        """
+        Real TX burst for arbitrary IQ waveform via libbladeRF sync interface.
+
+        Normalizes input IQ to SC16_Q11 range, enables TX, calls sync_tx,
+        then disables TX in a finally block.
+        """
+        _api = self._bladerf_mod._bladerf
+        self._device.sync_config(
+            layout=_api.ChannelLayout.TX_X1,
+            fmt=_api.Format.SC16_Q11,
+            num_buffers=16,
+            buffer_size=8192,
+            num_transfers=8,
+            stream_timeout=3500,
+        )
+        # Scale complex IQ to Q11 range (~25% of full scale for safety headroom)
+        scale = 512  # 512/2047 ~ 25% of full SC16_Q11 range
+        tx_i = np.clip(np.real(iq_samples) * scale, -2047, 2047).astype(np.int16)
+        tx_q = np.clip(np.imag(iq_samples) * scale, -2047, 2047).astype(np.int16)
+        buf_arr = np.empty(n_tx * 2, dtype=np.int16)
+        buf_arr[0::2] = tx_i
+        buf_arr[1::2] = tx_q
+        buf = bytearray(buf_arr.tobytes())
+
+        tx_ch = self._bladerf_mod.CHANNEL_TX(0)
+        self._device.enable_module(tx_ch, True)
+        self._log.append(
+            f"TX IQ ENABLED: f={self._config.center_freq_hz/1e6:.1f} MHz, "
+            f"n_tx={n_tx}, dur={duration_s*1e3:.2f} ms"
+        )
+        try:
+            self._device.sync_tx(buf, n_tx)
+            self._log.append("TX IQ burst complete.")
+        finally:
+            self._device.enable_module(tx_ch, False)
+            self._log.append("TX IQ DISABLED.")
 
     def transmit_tone(
         self,

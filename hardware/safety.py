@@ -140,6 +140,7 @@ def validate_n_samples(n_samples: int) -> None:
 
 MAX_FIRST_TX_PILOT_DURATION_S: float = 0.05        # 50 ms max for pilot burst
 MAX_REFLECTOR_TX_DURATION_PER_FREQ_S: float = 0.02  # 20 ms max per frequency step
+MAX_OFDM_IQ_BURST_DURATION_S: float = 0.01         # 10 ms max for OFDM IQ burst
 MIN_REFLECTOR_DISTANCE_M: float = 0.5               # closer than 0.5 m is unsafe
 MAX_REFLECTOR_DISTANCE_M: float = 3.0               # beyond 3 m, SNR will be very low
 FIRST_TX_ALLOWED_ANTENNA_MODE: str = "antenna_reflector_test"

@@ -2,6 +2,40 @@
 
 ---
 
+## Session 2026-06-01
+
+**Goal:** OFDM single-block acquisition layer after UWB-OFDM-SAR architecture pivot (f365e39).
+
+**Files created:**
+- `acquisition/ofdm_block_capture.py` — OFDMBlockConfig, OFDMBlockResult, build_known_ofdm_frame, estimate_h_from_rx_frame, capture_ofdm_block, hardware-independent.
+- `processing/ofdm_block_stitcher.py` — OFDMStitchBlock, stitch_ofdm_blocks, phase offset correction scaffold.
+- `experiments/run_ofdm_single_block_capture.py` — prepare-only, dry-run, run-hardware modes.
+- `configs/ofdm_single_block_2p4ghz.yaml` — conservative 2.4 GHz OFDM block config.
+- `tests/test_ofdm_block_capture.py` — 28 unit tests, fake data only, no bladeRF import.
+- `tests/test_ofdm_block_stitcher.py` — 26 unit tests, synthetic data only, no hardware.
+- `docs/ofdm_single_block_capture_plan.md` — plan, limitations, next steps.
+- `reports/session_reports/2026-06-01_ofdm_single_block_capture_layer.md` — full session report (Spanish).
+
+**Files modified:**
+- `hardware/bladerf_device.py` — added `transmit_iq_burst()` for arbitrary OFDM IQ TX.
+- `hardware/safety.py` — added `MAX_OFDM_IQ_BURST_DURATION_S = 0.01` (10 ms).
+
+**Test results:** 347/347 passed. (+68 new tests)
+
+**prepare-only result:** OFDM frame built (2560 samples), H[k] estimated over 120 active bins at 2.4 GHz, |H| mean = 1.067, CIR peak at sample 30 (synthetic path). No hardware.
+
+**dry-run result:** capture_ofdm_block() with FakeDevice, H shape (256,), active bins 120, |H| mean = 1.013. No bladeRF import confirmed.
+
+**Hardware run:** NOT performed. No bladeRF connected during this session.
+
+**Arbitrary IQ TX support:** `transmit_iq_burst()` implemented and tested with fake backend. Real hardware mode requires supervision and confirmation phrases.
+
+**No clinical claims.** No phantom. No human subject. No motor scan. No SAR imaging.
+
+**Next step:** Connect bladeRF with antennas + metal reflector, run `--run-hardware` under supervision. If H[k] shows a reflection peak, proceed to multi-block stitching.
+
+---
+
 ## Session 2026-05-30
 
 **Goal:** Build the hardware-independent simulation pipeline (Phase 1 of thesis roadmap).
