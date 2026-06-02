@@ -189,6 +189,144 @@ def test_image_grid_from_config():
     assert x_img[-1] > 0.15
 
 
+# ---------------------------------------------------------------------------
+# scan_from_config (was untested)
+# ---------------------------------------------------------------------------
+
+def test_scan_from_config_shape():
+    """scan_from_config must produce H with the right (N_f, N_az) shape."""
+    cfg = {
+        "phantom": {"targets": [{"x_m": 0.0, "z_m": 0.10}], "target_rcs": 1.0},
+        "sfcw": {"f_start_hz": 500e6, "f_stop_hz": 2500e6, "f_step_hz": 50e6},
+        "azimuth": {"x_start_m": -0.10, "x_stop_m": 0.10, "x_step_m": 0.05},
+        "reconstruction": {"speed_of_light": 3e8},
+    }
+    from simulation.phantom_model import phantom_from_config
+    from simulation.synthetic_scan import scan_from_config
+    phantom = phantom_from_config(cfg)
+    scan = scan_from_config(phantom, cfg)
+    # f: 500-2500 MHz, step 50 MHz -> 41 points; x: -0.10 to +0.10, step 0.05 -> 5 positions
+    assert scan.H.shape[1] == 5
+    assert scan.H.shape[0] == 41
+    assert scan.H.dtype == np.complex128
+
+
+def test_scan_from_config_bandwidth():
+    """scan_from_config must preserve the bandwidth specified in config."""
+    cfg = {
+        "phantom": {"targets": [{"x_m": 0.0, "z_m": 0.10}], "target_rcs": 1.0},
+        "sfcw": {"f_start_hz": 1000e6, "f_stop_hz": 3000e6, "f_step_hz": 100e6},
+        "azimuth": {"x_start_m": 0.0, "x_stop_m": 0.0, "x_step_m": 1.0},
+        "reconstruction": {"speed_of_light": 3e8},
+    }
+    from simulation.phantom_model import phantom_from_config
+    from simulation.synthetic_scan import scan_from_config
+    phantom = phantom_from_config(cfg)
+    scan = scan_from_config(phantom, cfg)
+    assert scan.bandwidth_hz == pytest.approx(2e9, rel=1e-3)
+
+
+# ---------------------------------------------------------------------------
+# Configurable propagation speed (was untested)
+# ---------------------------------------------------------------------------
+
+def test_range_profile_custom_speed():
+    """Peak must scale correctly when propagation speed is halved."""
+    target_range = 0.10   # [m], one-way
+    c_custom = 1.5e8      # half of free space
+    phantom = PhantomModel(targets=[PointTarget(x_m=0.0, z_m=target_range)], c=c_custom)
+    scan = make_scan(phantom, 500e6, 2500e6, 5e6, 0.0, 0.0, 1.0)
+    range_m, profiles = compute_range_profiles(scan, padding_factor=4, window='none', c=c_custom)
+    peak_idx = int(np.argmax(np.abs(profiles[:, 0])))
+    peak_range = range_m[peak_idx]
+    range_bin = range_m[1] - range_m[0]
+    assert abs(peak_range - target_range) <= 2 * range_bin
+
+
+def test_backprojection_custom_speed():
+    """Backprojection with custom c must still locate target correctly."""
+    c = 1.5e8
+    target_x, target_z = 0.0, 0.08
+    phantom = PhantomModel(targets=[PointTarget(x_m=target_x, z_m=target_z)], c=c)
+    scan = make_scan(phantom, 500e6, 2500e6, 5e6, -0.12, 0.12, 0.02)
+    x_img = np.linspace(-0.15, 0.15, 81)
+    z_img = np.linspace(0.01, 0.20, 101)
+    img = backprojection(scan, x_img, z_img, c=c, padding_factor=4)
+    ix, iz = np.unravel_index(np.argmax(np.abs(img)), img.shape)
+    assert abs(x_img[ix] - target_x) < 0.03
+    assert abs(z_img[iz] - target_z) < 0.03
+
+
+# ---------------------------------------------------------------------------
+# Range resolution formula verification
+# ---------------------------------------------------------------------------
+
+def test_range_resolution_formula():
+    """
+    With bandwidth BW, theoretical range resolution = c / (2 * BW).
+    Peak width at half-maximum should be within 2x of theoretical value.
+    """
+    c = 3e8
+    BW = 2e9  # 2 GHz -> dr = 7.5 cm
+    dr_theory = c / (2 * BW)
+
+    phantom = PhantomModel(targets=[PointTarget(x_m=0.0, z_m=0.15)], c=c)
+    scan = make_scan(phantom, 500e6, 500e6 + BW, 5e6, 0.0, 0.0, 1.0)
+    range_m, profiles = compute_range_profiles(scan, padding_factor=8, window='none', c=c)
+
+    prof = np.abs(profiles[:, 0])
+    peak_idx = int(np.argmax(prof))
+    half_max = prof[peak_idx] / 2.0
+    above = np.where(prof >= half_max)[0]
+    width_m = (above[-1] - above[0]) * (range_m[1] - range_m[0])
+    # Width should be within (0.5, 4) * theoretical resolution
+    assert 0.5 * dr_theory <= width_m <= 4.0 * dr_theory, (
+        f"Peak width {width_m*100:.1f} cm, theory {dr_theory*100:.1f} cm"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Noise propagation through full pipeline
+# ---------------------------------------------------------------------------
+
+def test_noisy_pipeline_still_locates_target():
+    """With moderate SNR, backprojection must still find the target within 3 cm."""
+    c = 3e8
+    target_x, target_z = 0.0, 0.12
+    phantom = PhantomModel(targets=[PointTarget(x_m=target_x, z_m=target_z)], c=c)
+    rng = np.random.default_rng(7)
+    scan = make_scan(phantom, 500e6, 2500e6, 5e6, -0.15, 0.15, 0.02,
+                     noise_std=0.1, rng=rng)
+    x_img = np.linspace(-0.20, 0.20, 81)
+    z_img = np.linspace(0.02, 0.25, 121)
+    img = backprojection(scan, x_img, z_img, c=c, padding_factor=4)
+    ix, iz = np.unravel_index(np.argmax(np.abs(img)), img.shape)
+    assert abs(x_img[ix] - target_x) < 0.03
+    assert abs(z_img[iz] - target_z) < 0.03
+
+
+def test_phantom_from_config_multiple_targets():
+    """phantom_from_config must load all targets from config list."""
+    cfg = {
+        "phantom": {
+            "targets": [
+                {"x_m": -0.05, "z_m": 0.10},
+                {"x_m":  0.05, "z_m": 0.15},
+                {"x_m":  0.00, "z_m": 0.20},
+            ],
+            "target_rcs": 2.0,
+        },
+        "reconstruction": {"speed_of_light": 3e8},
+    }
+    from simulation.phantom_model import phantom_from_config
+    phantom = phantom_from_config(cfg)
+    assert len(phantom.targets) == 3
+    assert all(t.amplitude == pytest.approx(2.0) for t in phantom.targets)
+    positions = [(t.x_m, t.z_m) for t in phantom.targets]
+    assert (-0.05, 0.10) in positions
+    assert (0.00, 0.20) in positions
+
+
 def test_no_bladerf_imports():
     """Verify none of the simulation/processing modules import bladeRF."""
     import importlib
